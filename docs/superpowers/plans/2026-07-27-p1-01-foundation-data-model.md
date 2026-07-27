@@ -532,8 +532,13 @@ export {}
 `packages/db/drizzle.config.ts`:
 
 ```typescript
-import 'dotenv/config'
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
 import { defineConfig } from 'drizzle-kit'
+
+// drizzle-kit bundles this file as CJS, where `import.meta.dirname` is unavailable,
+// so resolve relative to cwd — drizzle-kit is always invoked from packages/db.
+config({ path: resolve(process.cwd(), '../../.env') })
 
 export default defineConfig({
   schema: './src/schema/index.ts',
@@ -548,9 +553,12 @@ export default defineConfig({
 `packages/db/src/migrate.ts`:
 
 ```typescript
-import 'dotenv/config'
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { createDb } from './client.js'
+
+config({ path: resolve(import.meta.dirname, '../../../.env') })
 
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('DATABASE_URL is not set')
