@@ -435,8 +435,9 @@ import { createDb } from '../src/client.js'
 describe('database client', () => {
   it('connects and reports Postgres 17 or later', async () => {
     const db = createDb(process.env.DATABASE_URL_TEST!)
-    const result = await db.execute<{ version: string }>(sql`SHOW server_version`)
-    const major = Number(String(result.rows[0]!.version).split('.')[0])
+    // `SHOW server_version` names its column `server_version`, not `version`.
+    const result = await db.execute<{ server_version: string }>(sql`SHOW server_version`)
+    const major = Number(String(result.rows[0]!.server_version).split('.')[0])
     expect(major).toBeGreaterThanOrEqual(17)
   })
 
@@ -573,17 +574,33 @@ export async function setup(): Promise<void> {
 }
 ```
 
+`packages/db/tests/env.ts` — loads the workspace-root `.env`. `dotenv/config` alone
+resolves relative to the process cwd, which is `packages/db` under `pnpm --filter`, so the
+root file is never found:
+
+```typescript
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
+
+config({ path: resolve(import.meta.dirname, '../../../.env') })
+```
+
 `packages/db/vitest.config.ts`:
 
 ```typescript
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
 import { defineConfig } from 'vitest/config'
+
+// Loaded at config-evaluation time so globalSetup sees the variables too.
+config({ path: resolve(import.meta.dirname, '../../.env') })
 
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
     globalSetup: ['./tests/setup.ts'],
-    setupFiles: ['dotenv/config'],
+    setupFiles: ['./tests/env.ts'],
     fileParallelism: false,
   },
 })
