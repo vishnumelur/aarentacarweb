@@ -5,9 +5,21 @@ build/
 dist/
 .turbo/
 
+# Secrets — broad by design. Anything ending .env, in any case, anywhere.
 .env
 .env.*
+*.env
+*.ENV
+*.Env
 !.env.example
+
+# Credentials
+*.pem
+*.key
+*credentials*
+*secret*
+*token*
+.netrc
 
 .DS_Store
 *.log
