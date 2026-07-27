@@ -1,3 +1,5 @@
 export * from './money.js'
 export * from './state-machine.js'
+export * from './pricing/types.js'
 export * from './pricing/rate-resolution.js'
+export * from './pricing/quote.js'
