@@ -52,6 +52,31 @@ describe('money arithmetic', () => {
     expect(() => applyBps(-1, 500)).toThrow(/negative/)
   })
 
+  it('rejects a proportion greater than 100%', () => {
+    expect(() => applyBps(84000, 10001)).toThrow(/10000 basis points/)
+    // Exactly 100% is legal.
+    expect(applyBps(84000, 10000)).toBe(84000)
+  })
+
+  it('still permits a multiplier above 1x', () => {
+    // A seasonal peak multiplier of 1.3x is not a proportion and must not be capped.
+    expect(applyMultiplierBps(10000, 13000)).toBe(13000)
+    expect(applyMultiplierBps(10000, 25000)).toBe(25000)
+  })
+
+  it('rejects an amount large enough to lose precision', () => {
+    const tooLarge = Math.floor(Number.MAX_SAFE_INTEGER / 10_000) + 1
+    expect(() => addVat(tooLarge, 500)).toThrow(/prevents integer overflow/)
+    expect(() => applyBps(tooLarge, 500)).toThrow(/prevents integer overflow/)
+    // A realistic monthly lease is nowhere near the ceiling.
+    expect(() => addVat(5_000_000, 500)).not.toThrow()
+  })
+
+  it('guards filsToAed directly, not only through shared helpers', () => {
+    expect(() => filsToAed(100.5)).toThrow(/integer/)
+    expect(() => filsToAed(-1)).toThrow(/negative/)
+  })
+
   it('formats fils as AED for display', () => {
     expect(filsToAed(12000)).toBe('120.00')
     expect(filsToAed(5)).toBe('0.05')
