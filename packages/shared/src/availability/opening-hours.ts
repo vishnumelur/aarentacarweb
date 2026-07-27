@@ -32,6 +32,11 @@ export function dubaiWeekday(at: Date): number {
   return index
 }
 
+function dubaiParts(at: Date, opts: Intl.DateTimeFormatOptions): Record<string, string> {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: DUBAI, ...opts }).formatToParts(at)
+  return Object.fromEntries(parts.map((p) => [p.type, p.value]))
+}
+
 /**
  * The Asia/Dubai calendar date of a UTC instant, as `YYYY-MM-DD`.
  *
@@ -39,17 +44,21 @@ export function dubaiWeekday(at: Date): number {
  * dates. Slicing `toISOString()` gives the UTC date instead, which is one day behind
  * for any instant from 20:00Z onward, so a car in the workshop on its actual return
  * day would read as available.
+ *
+ * Assembled from parts rather than trusting a locale to format as YYYY-MM-DD.
+ * This runs on Hermes in the Expo app, where Intl delegates to platform ICU and
+ * our tests never execute.
  */
 export function dubaiDate(at: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: DUBAI, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(at)
+  const p = dubaiParts(at, { year: 'numeric', month: '2-digit', day: '2-digit' })
+  return `${p.year}-${p.month}-${p.day}`
 }
 
 export function dubaiTimeOfDay(at: Date): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: DUBAI, hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(at)
+  // hourCycle 'h23' is explicit: some locale/option combinations render midnight as
+  // 24:00, which would make toMinutes return 1440 and break every comparison.
+  const p = dubaiParts(at, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  return `${p.hour}:${p.minute}`
 }
 
 /** `HH:MM` or `HH:MM:SS` to minutes since midnight, so comparison is numeric. */

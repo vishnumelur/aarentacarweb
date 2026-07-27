@@ -14,9 +14,18 @@ export type { Addon, PromoCode, QuoteLine } from './types.js'
 export interface QuoteInput {
   readonly product: BookingProduct
   readonly classId: string
-  /** `YYYY-MM-DD`, inclusive. */
+  /**
+   * `YYYY-MM-DD` in **Asia/Dubai**, inclusive. Derive it with `dubaiDate()` from
+   * `availability/opening-hours` — never `toISOString().slice(0, 10)`, which gives the
+   * UTC date and is one day early for any instant from 20:00Z onward.
+   */
   readonly startDate: string
-  /** `YYYY-MM-DD`, exclusive — the day the car comes back. */
+  /**
+   * `YYYY-MM-DD` in **Asia/Dubai**, exclusive — the day the car comes back. Derive it
+   * with `dubaiDate()` from `availability/opening-hours` — never
+   * `toISOString().slice(0, 10)`, which gives the UTC date and is one day early for
+   * any instant from 20:00Z onward.
+   */
   readonly endDate: string
   readonly rateCards: readonly RateCard[]
   readonly weeklyTiers: readonly WeeklyTier[]
@@ -126,6 +135,12 @@ function rentalDays(startDate: string, endDate: string): number {
  *
  * That last line is exactly the database's `totals_consistent` CHECK. A quote that
  * cannot be persisted is a bug, so the shapes are kept identical on purpose.
+ *
+ * THROWS if no rate card covers the start date. That is a configuration error for the
+ * whole vehicle class, not a per-booking condition, so it is deliberately not a
+ * `promoRejectedReason`-style soft failure. Callers rendering a list of vehicles must
+ * filter out classes with no current rate card before quoting, or guard each call —
+ * one unpriceable class must not take down a search page.
  */
 export function quote(input: QuoteInput): QuoteResult {
   const days = rentalDays(input.startDate, input.endDate)

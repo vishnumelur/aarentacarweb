@@ -100,4 +100,20 @@ describe('opening hours', () => {
     expect(() => isWithinOpeningHours(malformed, new Date('2026-08-01T06:00:00Z')))
       .toThrow(/Invalid time/)
   })
+
+  it('checks every Friday boundary, the edges that motivate two intervals per weekday', () => {
+    // 2026-08-07 is a Friday. Dubai is UTC+4. Hours: 08:30-12:00 and 17:00-21:30.
+    const FRI: OpeningInterval[] = [
+      { weekday: 5, opensAt: '08:30:00', closesAt: '12:00:00' },
+      { weekday: 5, opensAt: '17:00:00', closesAt: '21:30:00' },
+    ]
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T04:29:00Z'))).toBe(false) // 08:29
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T04:30:00Z'))).toBe(true)  // 08:30 opens
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T07:59:00Z'))).toBe(true)  // 11:59
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T08:00:00Z'))).toBe(false) // 12:00 shuts
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T12:59:00Z'))).toBe(false) // 16:59
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T13:00:00Z'))).toBe(true)  // 17:00 reopens
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T17:29:00Z'))).toBe(true)  // 21:29
+    expect(isWithinOpeningHours(FRI, new Date('2026-08-07T17:30:00Z'))).toBe(false) // 21:30 shuts
+  })
 })

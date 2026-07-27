@@ -3,7 +3,7 @@ import { quote } from '../src/pricing/quote.js'
 import { checkAvailability } from '../src/availability/engine.js'
 import { canTransition } from '../src/state-machine.js'
 import type { RateCard } from '../src/pricing/rate-resolution.js'
-import type { OpeningInterval } from '../src/availability/opening-hours.js'
+import { dubaiDate, type OpeningInterval } from '../src/availability/opening-hours.js'
 
 const CARD: RateCard = {
   id: 'card-1', classId: 'economy', dailyRateFils: 12000, depositFils: 100000,
@@ -27,9 +27,12 @@ describe('the three engines compose into a bookable quote', () => {
     })
     expect(availability.available).toBe(true)
 
+    // Derived from the same Date values passed to checkAvailability, exactly as the
+    // booking flow must — never toISOString().slice(0, 10), which would give the UTC
+    // date and demonstrate a composition the real flow does not use.
     const q = quote({
       product: 'self_drive', classId: 'economy',
-      startDate: '2026-08-01', endDate: '2026-08-03',
+      startDate: dubaiDate(startsAt), endDate: dubaiDate(endsAt),
       rateCards: [CARD], weeklyTiers: [], seasonalRates: [], addons: [],
       promoCode: null, deliveryFeeFils: 0, oneWayFeeFils: 0, vatBps: 500,
     })

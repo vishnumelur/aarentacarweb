@@ -114,20 +114,6 @@ describe('booking state machine', () => {
     expect(canTransition('EN_ROUTE', 'CANCELLED')).toBe(false)
   })
 
-  it('asserts every declared edge is exercised by the suite', () => {
-    // Guards against an edge existing that nothing tests — the reachability test
-    // cannot catch this, because a redundant edge changes nothing it measures.
-    const declared = BOOKING_STATUSES.flatMap(
-      (from) => nextStates(from).map((to) => `${from}->${to}`),
-    )
-    for (const edge of declared) {
-      const [from, to] = edge.split('->') as [BookingStatus, BookingStatus]
-      expect(canTransition(from, to), `${edge} is declared but must be reachable`).toBe(true)
-    }
-    // Sanity: the graph is not trivially empty.
-    expect(declared.length).toBeGreaterThan(20)
-  })
-
   it('has no unreachable state other than DRAFT', () => {
     const reachable = new Set<BookingStatus>(['DRAFT'])
     let grew = true

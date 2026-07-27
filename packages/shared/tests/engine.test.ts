@@ -147,7 +147,15 @@ describe('availability engine', () => {
 
   it('rejects a range that ends before it starts', () => {
     expect(() => checkAvailability(base({ endsAt: new Date('2026-07-01T06:00:00Z') })))
-      .toThrow(/before/i)
+      .toThrow(/not after/i)
+  })
+
+  it('rejects a zero-length range rather than reporting the vehicle available', () => {
+    // bookings.range_ordered requires ends_at > starts_at strictly. If a vehicle is OUT
+    // for the surrounding week, a same-instant range must not slip past this guard and
+    // report available only to fail with a raw Postgres error on INSERT.
+    expect(() => checkAvailability(base({ endsAt: START })))
+      .toThrow(/not after/i)
   })
 
   it('uses the Dubai business date, not the UTC date, for maintenance (NFR-5)', () => {

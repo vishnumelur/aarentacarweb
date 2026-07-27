@@ -21,9 +21,10 @@ export type {
  * the customer as a raw Postgres error rather than a graceful message.
  */
 export function checkAvailability(input: AvailabilityInput): AvailabilityResult {
-  if (input.endsAt.getTime() < input.startsAt.getTime()) {
+  if (input.endsAt.getTime() <= input.startsAt.getTime()) {
     throw new Error(
-      `Return ${input.endsAt.toISOString()} is before pickup ${input.startsAt.toISOString()}`,
+      `Return ${input.endsAt.toISOString()} is not after pickup ${input.startsAt.toISOString()}. ` +
+      `A zero-length rental is not a rental, and bookings.range_ordered rejects it.`,
     )
   }
 
