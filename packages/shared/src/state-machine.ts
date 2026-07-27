@@ -23,9 +23,16 @@ export type BookingStatus = (typeof BOOKING_STATUSES)[number]
  * driving is not a thing.
  */
 const TRANSITIONS: Readonly<Record<BookingStatus, readonly BookingStatus[]>> = {
+  // DRAFT -> CONFIRMED skips payment deliberately: pay-at-pickup bookings (FR-4.2) and
+  // staff walk-in bookings at the counter (FR-3.6) are confirmed without an online
+  // capture. Enforcing that only those two paths use it is the service layer's job —
+  // this graph describes what is structurally legal, not who may do it.
   DRAFT: ['PENDING_PAYMENT', 'CONFIRMED', 'CANCELLED', 'EXPIRED'],
   PENDING_PAYMENT: ['CONFIRMED', 'CANCELLED', 'EXPIRED'],
-  CONFIRMED: ['DOCS_VERIFIED', 'CANCELLED'],
+  // NO_SHOW reachable from CONFIRMED: a pay-at-pickup booking is reserved without
+  // capture (FR-4.2), so a customer can simply never appear before documents are
+  // ever submitted. Cancellation is a customer decision; no-show is a policy outcome.
+  CONFIRMED: ['DOCS_VERIFIED', 'CANCELLED', 'NO_SHOW'],
   DOCS_VERIFIED: ['READY_FOR_PICKUP', 'ASSIGNED', 'CANCELLED', 'NO_SHOW'],
   READY_FOR_PICKUP: ['OUT', 'CANCELLED', 'NO_SHOW'],
   OUT: ['RETURNED'],
@@ -45,6 +52,16 @@ const TRANSITIONS: Readonly<Record<BookingStatus, readonly BookingStatus[]>> = {
   DROPPED: ['CLOSING'],
 }
 
+/**
+ * Test whether a transition is structurally legal in the state machine.
+ *
+ * This function is context-free: it answers "is this transition allowed by the graph",
+ * not "may this actor perform it" or "are the preconditions met in the database". The
+ * spec names a `ctx` parameter, but contextual guards — verified documents, captured
+ * deposit, actor permissions — depend on service state and belong in the application
+ * layer, which composes them with this predicate. Adding an unused parameter now
+ * would be speculative and violate the single-responsibility principle.
+ */
 export function canTransition(from: BookingStatus, to: BookingStatus): boolean {
   return TRANSITIONS[from].includes(to)
 }

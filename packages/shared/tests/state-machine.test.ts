@@ -88,6 +88,39 @@ describe('booking state machine', () => {
       .toThrow(/DRAFT.*COMPLETED/)
   })
 
+  it('confirms a pay-at-pickup or walk-in booking without an online payment', () => {
+    // FR-3.6 counter bookings and FR-4.2 pay-at-pickup skip PENDING_PAYMENT.
+    expect(canTransition('DRAFT', 'CONFIRMED')).toBe(true)
+  })
+
+  it('marks a reserved but unpaid booking as no-show (FR-4.2)', () => {
+    expect(canTransition('CONFIRMED', 'NO_SHOW')).toBe(true)
+  })
+
+  it('allows a dispatched chauffeur trip to be cancelled or no-showed before it starts', () => {
+    expect(canTransition('ASSIGNED', 'CANCELLED')).toBe(true)
+    expect(canTransition('ASSIGNED', 'NO_SHOW')).toBe(true)
+    // The driver has arrived and the customer is not there.
+    expect(canTransition('ARRIVED', 'NO_SHOW')).toBe(true)
+    // Once the trip is under way there is no cancelling it.
+    expect(canTransition('IN_TRIP', 'CANCELLED')).toBe(false)
+    expect(canTransition('EN_ROUTE', 'CANCELLED')).toBe(false)
+  })
+
+  it('asserts every declared edge is exercised by the suite', () => {
+    // Guards against an edge existing that nothing tests — the reachability test
+    // cannot catch this, because a redundant edge changes nothing it measures.
+    const declared = BOOKING_STATUSES.flatMap(
+      (from) => nextStates(from).map((to) => `${from}->${to}`),
+    )
+    for (const edge of declared) {
+      const [from, to] = edge.split('->') as [BookingStatus, BookingStatus]
+      expect(canTransition(from, to), `${edge} is declared but must be reachable`).toBe(true)
+    }
+    // Sanity: the graph is not trivially empty.
+    expect(declared.length).toBeGreaterThan(20)
+  })
+
   it('has no unreachable state other than DRAFT', () => {
     const reachable = new Set<BookingStatus>(['DRAFT'])
     let grew = true
