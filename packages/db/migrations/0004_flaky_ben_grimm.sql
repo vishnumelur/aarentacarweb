@@ -1,0 +1,2 @@
+ALTER TABLE "promo_codes" ADD COLUMN "applicable_products" text[];--> statement-breakpoint
+CREATE UNIQUE INDEX "rate_cards_one_current_per_class" ON "rate_cards" USING btree ("class_id") WHERE "rate_cards"."valid_to" IS NULL;

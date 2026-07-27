@@ -1,5 +1,5 @@
 import {
-  pgTable, pgEnum, uuid, text, integer, boolean, date, timestamp, check, index,
+  pgTable, pgEnum, uuid, text, integer, boolean, date, timestamp, check, index, uniqueIndex,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 import { vehicleClasses } from './fleet'
@@ -22,6 +22,12 @@ export const rateCards = pgTable('rate_cards', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('rate_cards_class_validity_idx').on(t.classId, t.validFrom),
+  // FR-17.7 — at most one open-ended (current) rate card per class. Without this, two
+  // cards could both claim to be in force and "which rate applies" is unanswerable
+  // from the data alone.
+  uniqueIndex('rate_cards_one_current_per_class')
+    .on(t.classId)
+    .where(sql`${t.validTo} IS NULL`),
   check('daily_rate_non_negative', sql`${t.dailyRateFils} >= 0`),
   check('deposit_non_negative', sql`${t.depositFils} >= 0`),
   check('validity_ordered', sql`${t.validTo} IS NULL OR ${t.validTo} >= ${t.validFrom}`),
@@ -42,6 +48,8 @@ export const weeklyTiers = pgTable('weekly_tiers', {
 // FR-17.2 — overlapping rules resolve by priority, highest wins
 export const seasonalRates = pgTable('seasonal_rates', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // cascade (unlike rate_cards' restrict): a seasonal rule for a deleted class is
+  // meaningless, whereas a rate card may still be pinned by a historic booking.
   classId: uuid('class_id').notNull().references(() => vehicleClasses.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   startsOn: date('starts_on').notNull(),
@@ -72,6 +80,10 @@ export const promoCodes = pgTable('promo_codes', {
   discountValue: integer('discount_value').notNull(),
   validFrom: date('valid_from').notNull(),
   validTo: date('valid_to').notNull(),
+  // FR-17.4 — which products this code applies to. NULL means all products.
+  // A text array rather than the bookingProduct enum: that enum lives in booking.ts,
+  // which imports from this file, and an enum reference here would be circular.
+  applicableProducts: text('applicable_products').array(),
   minBookingValueFils: integer('min_booking_value_fils').notNull().default(0),
   totalUsageCap: integer('total_usage_cap'),
   perCustomerCap: integer('per_customer_cap').notNull().default(1),
