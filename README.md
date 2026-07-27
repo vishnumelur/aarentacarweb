@@ -1,6 +1,6 @@
 # AA Rent A Car
 
-Dubai car rental platform — public booking site plus customer, chauffeur, manager and owner
+**Auto Assist Service (AA Rentals)** — Dubai car rental platform. Public booking site plus customer, chauffeur, manager and owner
 portals, sharing one database with a React Native / Expo mobile app.
 
 **Status:** design complete, implementation not started.

@@ -8,6 +8,28 @@
 
 ## 1. Overview
 
+### The business as it exists today
+
+**Auto Assist Service (AA Rentals)** — "Experience Luxury in Every Drive".
+
+| | |
+|---|---|
+| Existing site | https://aa-rentacar.com/ — WordPress/WooCommerce |
+| Branches | **Al Karama** (main): Khalifa bin Zayed Street, near ADCB Metro Station Exit 1, Dubai<br>**Dubai Media City**: Ground floor, Building 10 (BCC World News Building), Dubai |
+| Hours | Saturday–Thursday 08:00–21:30 · Friday 08:30–12:00 and 17:00–21:30 |
+| Phone | +971 50 337 7877 · +971 50 694 3808 · +971 50 770 0088 · +971 4 337 7877 |
+| WhatsApp | +971 50 337 7877 |
+| Social | Facebook, Instagram, Twitter, LinkedIn |
+| Fleet brands | Mercedes-Benz, BMW, Audi, Porsche, Lexus, Toyota, Nissan, Hyundai, Chevrolet, MG |
+
+The current site has no booking engine, no published rates and no availability — it is a
+product catalogue on a generic e-commerce theme, with unconfigured defaults still visible
+(a "Cart", a "Wishlist", and a "Free shipping over $49" banner in USD). Enquiries arrive by
+phone and WhatsApp. Replacing this with a real reservation system is the point of the project.
+
+**Two branches exist from day one**, so branch scoping in staff permissions, per-branch
+availability, and pickup/return across branches are P1 concerns, not later additions.
+
 A Dubai-based car rental platform with four portals (customer, chauffeur, manager, owner)
 served from a single database, plus a React Native / Expo mobile app that consumes the same
 API. The website ships first; the app follows.
@@ -26,6 +48,18 @@ payout ledger. The owner portal is an executive and finance layer above day-to-d
 | Self-drive monthly lease | 1–12 month term, monthly invoicing | Separate rate table and billing schedule |
 | Chauffeur hourly | 4h / 8h / 12h city packages | Requires roster and dispatch |
 | Chauffeur transfers | Fixed price zone→zone (DXB, DWC, intercity) | Requires flight tracking and waiting rules |
+
+The business calls its chauffeur-driven product **"Limousine"**. Customer-facing copy uses
+that term; the data model uses `chauffeur` throughout.
+
+### Vehicle classes
+
+Carried over from the existing site, since customers and staff already use this vocabulary:
+
+`Economy` · `Compact` · `Medium` · `Family` · `Luxury` · `Sports` · `Limousine`
+
+Class drives rate cards, search filters and deposit amounts. It is a configurable table, not
+a hardcoded enum.
 
 ### Payment methods
 
@@ -419,7 +453,9 @@ Screen 15 spans P1 and P3 — the About, FAQ and Contact pages ship in P1; the b
    payment receipt, document status, pickup reminder, return reminder, overdue alert, charge
    raised, deposit released.
 2. Staff receive operational alerts: expiring documents, overdue returns, unassigned trips.
-3. Templates are editable and support English and Arabic.
+3. Templates are editable by staff. English only, per NFR-5.
+4. WhatsApp is a first-class channel, not an afterthought — it is how this business already
+   communicates with customers (+971 50 337 7877).
 
 ### FR-11 Roles & access
 1. Four roles with distinct permission sets; staff are scoped to a branch.
@@ -470,9 +506,16 @@ Screen 15 spans P1 and P3 — the About, FAQ and Contact pages ship in P1; the b
   gateways and messaging providers named in settings.
 
 ### NFR-5 Localisation
-- English and Arabic, with full right-to-left layout support for Arabic.
+- **English only.** Arabic is not in scope for any phase of this project.
+- Layouts are nonetheless built with logical CSS properties (`margin-inline-start` rather than
+  `margin-left`, `text-align: start` rather than `left`) and no hardcoded `ltr` assumptions.
+  This costs nothing when written from the outset and leaves Arabic as a later business
+  decision rather than a rebuild. No translation infrastructure, no `next-intl`, no message
+  catalogues — those are dead weight until Arabic is actually wanted.
 - All dates, times and currency formatted for the Asia/Dubai timezone and AED.
-- Timezone handling is explicit: store UTC, render Asia/Dubai.
+- Timezone handling is explicit: store UTC, render Asia/Dubai. Friday's split trading hours
+  (08:30–12:00 and 17:00–21:30) mean branch opening hours are a list of intervals per weekday,
+  not a single open/close pair — pickup and return time slots derive from them.
 
 ### NFR-6 Accessibility
 - WCAG 2.1 AA for the public site and customer portal.
@@ -484,6 +527,12 @@ Screen 15 spans P1 and P3 — the About, FAQ and Contact pages ship in P1; the b
 - Structured data: `Product` and `Offer` for vehicles, `LocalBusiness` for branches.
 - Clean, stable URLs; XML sitemap; canonical tags.
 - Vehicle and location landing pages are indexable and individually addressable.
+- **Migration from the existing WordPress site must preserve search rankings.** Before
+  cutover: crawl `aa-rentacar.com`, export every indexed URL, and map each to its replacement
+  with a 301 redirect. Anything without a natural replacement redirects to the nearest
+  category page, never to the homepage and never to a 404. Existing blog posts are migrated
+  with their URLs intact. Google Search Console is kept on the same property through cutover
+  so ranking loss is visible rather than guessed at.
 
 ### NFR-8 Observability
 - Structured JSON logs with request correlation IDs.
@@ -533,4 +582,11 @@ Not blocking phase 1, but needed before the phases that depend on them:
    pricing structure if so.
 4. **Insurance products.** Which coverage tiers are sold as addons, and the excess amount for
    each.
-5. **Branding.** Logo, palette and typography, required before public site visual design.
+5. **Branding.** Logo and typography can be lifted from the existing site; palette and the
+   broader visual direction need a decision before public site design begins.
+6. **Domain cutover plan.** Whether the new platform takes `aa-rentacar.com` directly or runs
+   on a staging subdomain first. Determines when the redirect map in NFR-7 must be ready.
+7. **Existing customer data.** Whether any customer records, enquiries or content exist in the
+   current WordPress install worth migrating, or the new system starts empty.
+8. **Published rates.** The current site publishes no prices. Rate cards for all seven vehicle
+   classes are needed before the booking engine can be tested against real data.
