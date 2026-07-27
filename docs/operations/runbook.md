@@ -596,6 +596,8 @@ Postgres separate at 2 cores / 4 GB. Below that, Postgres starts swapping and ev
 | Jobs not running | Redis reachable from 214? `docker compose logs worker` |
 | Postgres won't accept connections | `pg_hba.conf` peer IP; `max_connections` exhausted |
 | Container won't start after reboot | `--onboot 1` set? `pct config <CTID> \| grep onboot` |
+| `permission denied ... /var/run/docker.sock` | Your shell predates `usermod -aG docker`. A shell's group list is fixed at login, and `newgrp docker` appended to an install chain exits with its own subshell. Open a new terminal, or prefix with `sudo` once. |
+| `pg_isready: command not found`, service reported DOWN | Client tools live on the host, not in the images. `scripts/check-services.sh` probes TCP directly and needs none — but to query the database install them: `sudo apt-get install -y postgresql-client redis-tools`. A missing tool is not a down service. |
 
 Logs: application `docker compose logs -f` on 213/214 · Postgres `/var/log/postgresql/` ·
 Caddy `journalctl -u caddy -f` · MinIO `journalctl -u minio -f`.
