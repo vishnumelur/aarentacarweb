@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { sql } from 'drizzle-orm'
+import { sql, eq } from 'drizzle-orm'
 import {
   users, customers, branches, vehicleClasses, vehicles, rateCards,
   bookings, handovers, inspectionPhotos, damageMarkers,
@@ -72,7 +72,7 @@ describe('handover schema', () => {
     })).rejects.toThrow()
   })
 
-  it('timestamps photographs server-side and never trusts the client (NFR-11)', async () => {
+  it('defaults the capture timestamp server-side', async () => {
     const { booking, staff } = await aBooking()
     const [h] = await db.insert(handovers).values({
       bookingId: booking.id, kind: 'pickup', odometerKm: 20000,
@@ -97,5 +97,105 @@ describe('handover schema', () => {
       severity: 'scratch', notes: 'Light scuff, 5cm',
     }).returning()
     expect(marker!.panel).toBe('front_bumper')
+  })
+
+  it('refuses to delete a handover — evidence is superseded, never removed (NFR-11)', async () => {
+    const { booking, staff } = await aBooking()
+    const [h] = await db.insert(handovers).values({
+      bookingId: booking.id, kind: 'pickup', odometerKm: 20000,
+      fuelLevelEighths: 8, conductedByUserId: staff.id,
+    }).returning()
+    await expect(db.delete(handovers).where(eq(handovers.id, h!.id))).rejects.toThrow()
+  })
+
+  it('refuses to edit a handover in place (NFR-11)', async () => {
+    const { booking, staff } = await aBooking()
+    const [h] = await db.insert(handovers).values({
+      bookingId: booking.id, kind: 'pickup', odometerKm: 20000,
+      fuelLevelEighths: 8, conductedByUserId: staff.id,
+    }).returning()
+    await expect(
+      db.update(handovers).set({ odometerKm: 99999 }).where(eq(handovers.id, h!.id)),
+    ).rejects.toThrow()
+  })
+
+  it('supports the supersede workflow within one transaction (NFR-11)', async () => {
+    const { booking, staff } = await aBooking()
+    const [original] = await db.insert(handovers).values({
+      bookingId: booking.id, kind: 'pickup', odometerKm: 20000,
+      fuelLevelEighths: 8, conductedByUserId: staff.id,
+    }).returning()
+
+    const replacementId = crypto.randomUUID()
+    await db.transaction(async (tx) => {
+      // Mark the original superseded FIRST — the partial unique index permits only one
+      // active record per (booking, kind), and the deferrable FK tolerates the forward
+      // reference until commit.
+      await tx.update(handovers)
+        .set({ supersededById: replacementId })
+        .where(eq(handovers.id, original!.id))
+      await tx.insert(handovers).values({
+        id: replacementId, bookingId: booking.id, kind: 'pickup',
+        odometerKm: 20050, fuelLevelEighths: 7, conductedByUserId: staff.id,
+      })
+    })
+
+    const all = await db.select().from(handovers).where(eq(handovers.bookingId, booking.id))
+    expect(all).toHaveLength(2)
+    const active = all.filter((h) => h.supersededById === null)
+    expect(active).toHaveLength(1)
+    expect(active[0]!.odometerKm).toBe(20050)
+    // The original survives unaltered — that is the point.
+    const superseded = all.find((h) => h.id === original!.id)
+    expect(superseded!.odometerKm).toBe(20000)
+    expect(superseded!.supersededById).toBe(replacementId)
+  })
+
+  it('refuses a supersededById pointing at a handover that does not exist (NFR-11)', async () => {
+    const { booking, staff } = await aBooking()
+    const [h] = await db.insert(handovers).values({
+      bookingId: booking.id, kind: 'return', odometerKm: 21000,
+      fuelLevelEighths: 4, conductedByUserId: staff.id,
+    }).returning()
+    await expect(
+      db.update(handovers)
+        .set({ supersededById: crypto.randomUUID() })
+        .where(eq(handovers.id, h!.id)),
+    ).rejects.toThrow()
+  })
+
+  it('overrides a client-supplied capture timestamp with the server clock (NFR-11)', async () => {
+    const { booking, staff } = await aBooking()
+    const [h] = await db.insert(handovers).values({
+      bookingId: booking.id, kind: 'pickup', odometerKm: 20000,
+      fuelLevelEighths: 8, conductedByUserId: staff.id,
+    }).returning()
+    const backdated = new Date('2020-01-01T00:00:00Z')
+    const [photo] = await db.insert(inspectionPhotos).values({
+      handoverId: h!.id, objectKey: 'aa-inspections/rear.jpg',
+      angle: 'rear', uploadedByUserId: staff.id,
+      capturedAt: backdated,
+    }).returning()
+    // A client claiming 2020 must not be believed.
+    expect(photo!.capturedAt.getFullYear()).toBeGreaterThan(2020)
+  })
+
+  it('refuses to alter or delete an inspection photograph (NFR-11)', async () => {
+    const { booking, staff } = await aBooking()
+    const [h] = await db.insert(handovers).values({
+      bookingId: booking.id, kind: 'pickup', odometerKm: 20000,
+      fuelLevelEighths: 8, conductedByUserId: staff.id,
+    }).returning()
+    const [photo] = await db.insert(inspectionPhotos).values({
+      handoverId: h!.id, objectKey: 'aa-inspections/front.jpg',
+      angle: 'front', uploadedByUserId: staff.id,
+    }).returning()
+    await expect(
+      db.update(inspectionPhotos).set({ objectKey: 'tampered.jpg' })
+        .where(eq(inspectionPhotos.id, photo!.id)),
+    ).rejects.toThrow()
+    await expect(
+      db.delete(inspectionPhotos).where(eq(inspectionPhotos.id, photo!.id)),
+    ).rejects.toThrow()
   })
 })

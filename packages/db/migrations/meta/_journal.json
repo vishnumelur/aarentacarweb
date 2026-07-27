@@ -57,6 +57,13 @@
       "when": 1785159365391,
       "tag": "0007_breezy_namor",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785159740805,
+      "tag": "0008_handover_append_only",
+      "breakpoints": true
     }
   ]
 }

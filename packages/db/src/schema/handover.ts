@@ -23,6 +23,12 @@ export const handovers = pgTable('handovers', {
   signatureIpAddress: text('signature_ip_address'),
   termsVersion: text('terms_version'),
   contractObjectKey: text('contract_object_key'),
+  // NFR-11 — self-referencing FK, deferrable, and the append-only enforcement trigger
+  // both live in migrations/0008_handover_append_only.sql, NOT here. Drizzle cannot
+  // express a DEFERRABLE self-reference or a trigger, so this column is intentionally
+  // left as a plain uuid in the schema. A future `drizzle-kit generate` will not see
+  // that constraint or those triggers and must not be allowed to drop them — do not
+  // "fix" this by adding a `.references()` call here without re-reading 0008 first.
   supersededById: uuid('superseded_by_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
