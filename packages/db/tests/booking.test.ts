@@ -165,4 +165,49 @@ describe('booking schema', () => {
     await db.insert(bookingAddons).values(line)
     await expect(db.insert(bookingAddons).values(line)).rejects.toThrow()
   })
+
+  it('rejects a booking whose totals do not add up', async () => {
+    const f = await fixtures()
+    await expect(db.insert(bookings).values({
+      reference: 'AA-2026-000008', customerId: f.customer.id, product: 'self_drive',
+      vehicleId: f.vehicle.id, rateCardId: f.card.id,
+      startsAt: new Date('2026-08-01T08:00:00Z'),
+      endsAt: new Date('2026-08-03T08:00:00Z'),
+      // 24000 - 0 + 1200 = 25200, not 99999
+      subtotalFils: 24000, discountFils: 0, vatFils: 1200, totalFils: 99999, depositFils: 100000,
+    })).rejects.toThrow()
+  })
+
+  it('accepts totals that balance including a discount', async () => {
+    const f = await fixtures()
+    const [booking] = await db.insert(bookings).values({
+      reference: 'AA-2026-000009', customerId: f.customer.id, product: 'self_drive',
+      vehicleId: f.vehicle.id, rateCardId: f.card.id,
+      startsAt: new Date('2026-08-01T08:00:00Z'),
+      endsAt: new Date('2026-08-03T08:00:00Z'),
+      // 24000 - 2400 + 1080 = 22680
+      subtotalFils: 24000, discountFils: 2400, vatFils: 1080, totalFils: 22680, depositFils: 100000,
+    }).returning()
+    expect(booking!.totalFils).toBe(22680)
+  })
+
+  it('requires a vehicle on a self-drive booking but not on a chauffeur booking', async () => {
+    const f = await fixtures()
+    const base = {
+      customerId: f.customer.id, rateCardId: f.card.id,
+      startsAt: new Date('2026-08-01T08:00:00Z'),
+      endsAt: new Date('2026-08-03T08:00:00Z'),
+      subtotalFils: 24000, discountFils: 0, vatFils: 1200, totalFils: 25200, depositFils: 100000,
+    }
+    // Self-drive with no vehicle is meaningless and must be rejected.
+    await expect(db.insert(bookings).values({
+      ...base, reference: 'AA-2026-000010', product: 'self_drive',
+    })).rejects.toThrow()
+
+    // A chauffeur booking legitimately has no vehicle until dispatch assigns one.
+    const [chauffeur] = await db.insert(bookings).values({
+      ...base, reference: 'AA-2026-000011', product: 'chauffeur_hourly',
+    }).returning()
+    expect(chauffeur!.vehicleId).toBeNull()
+  })
 })
