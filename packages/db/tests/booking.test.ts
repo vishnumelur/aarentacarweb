@@ -64,7 +64,7 @@ describe('booking schema', () => {
       startsAt: new Date('2026-08-08T08:00:00Z'),
       endsAt: new Date('2026-08-01T08:00:00Z'),
       subtotalFils: 1, vatFils: 0, totalFils: 1, depositFils: 0,
-    })).rejects.toThrow()
+    })).rejects.toThrow(/range_ordered/)
   })
 
   it('rejects a duplicate booking reference', async () => {
@@ -77,7 +77,8 @@ describe('booking schema', () => {
       subtotalFils: 24000, vatFils: 1200, totalFils: 25200, depositFils: 100000,
     }
     await db.insert(bookings).values({ ...base, reference: 'AA-2026-000003' })
-    await expect(db.insert(bookings).values({ ...base, reference: 'AA-2026-000003' })).rejects.toThrow()
+    await expect(db.insert(bookings).values({ ...base, reference: 'AA-2026-000003' }))
+      .rejects.toThrow(/bookings_reference_unique/)
   })
 
   it('pins the rate card so historic bookings never reprice (FR-17.7)', async () => {
@@ -163,7 +164,7 @@ describe('booking schema', () => {
     }).returning()
     const line = { bookingId: booking!.id, addonId: addon!.id, quantity: 1, unitPriceFils: 2000, totalPriceFils: 2000 }
     await db.insert(bookingAddons).values(line)
-    await expect(db.insert(bookingAddons).values(line)).rejects.toThrow()
+    await expect(db.insert(bookingAddons).values(line)).rejects.toThrow(/booking_addon_unique/)
   })
 
   it('rejects a booking whose totals do not add up', async () => {
@@ -175,7 +176,7 @@ describe('booking schema', () => {
       endsAt: new Date('2026-08-03T08:00:00Z'),
       // 24000 - 0 + 1200 = 25200, not 99999
       subtotalFils: 24000, discountFils: 0, vatFils: 1200, totalFils: 99999, depositFils: 100000,
-    })).rejects.toThrow()
+    })).rejects.toThrow(/totals_consistent/)
   })
 
   it('accepts totals that balance including a discount', async () => {
@@ -202,12 +203,51 @@ describe('booking schema', () => {
     // Self-drive with no vehicle is meaningless and must be rejected.
     await expect(db.insert(bookings).values({
       ...base, reference: 'AA-2026-000010', product: 'self_drive',
-    })).rejects.toThrow()
+    })).rejects.toThrow(/self_drive_needs_vehicle/)
 
     // A chauffeur booking legitimately has no vehicle until dispatch assigns one.
     const [chauffeur] = await db.insert(bookings).values({
       ...base, reference: 'AA-2026-000011', product: 'chauffeur_hourly',
     }).returning()
     expect(chauffeur!.vehicleId).toBeNull()
+  })
+
+  it('rejects two CONFIRMED bookings that overlap on the same vehicle (bookings_no_vehicle_overlap)', async () => {
+    const f = await fixtures()
+    const base = {
+      customerId: f.customer.id, product: 'self_drive' as const,
+      vehicleId: f.vehicle.id, rateCardId: f.card.id,
+      subtotalFils: 24000, vatFils: 1200, totalFils: 25200, depositFils: 100000,
+      status: 'CONFIRMED' as const,
+    }
+    await db.insert(bookings).values({
+      ...base, reference: 'AA-2026-000012',
+      startsAt: new Date('2026-08-10T08:00:00Z'), endsAt: new Date('2026-08-13T08:00:00Z'),
+    })
+    // Overlaps 08-10..08-13 on the same vehicle while also CONFIRMED — must be rejected.
+    await expect(db.insert(bookings).values({
+      ...base, reference: 'AA-2026-000013',
+      startsAt: new Date('2026-08-12T08:00:00Z'), endsAt: new Date('2026-08-15T08:00:00Z'),
+    })).rejects.toThrow(/bookings_no_vehicle_overlap/)
+  })
+
+  it('permits an overlapping DRAFT booking on the same vehicle — only active bookings hold it', async () => {
+    const f = await fixtures()
+    const base = {
+      customerId: f.customer.id, product: 'self_drive' as const,
+      vehicleId: f.vehicle.id, rateCardId: f.card.id,
+      subtotalFils: 24000, vatFils: 1200, totalFils: 25200, depositFils: 100000,
+    }
+    await db.insert(bookings).values({
+      ...base, reference: 'AA-2026-000014', status: 'CONFIRMED',
+      startsAt: new Date('2026-08-20T08:00:00Z'), endsAt: new Date('2026-08-23T08:00:00Z'),
+    })
+    // Same vehicle, overlapping range, but DRAFT — the exclusion constraint's WHERE
+    // clause deliberately does not cover DRAFT, so this must succeed.
+    const [draft] = await db.insert(bookings).values({
+      ...base, reference: 'AA-2026-000015',
+      startsAt: new Date('2026-08-21T08:00:00Z'), endsAt: new Date('2026-08-22T08:00:00Z'),
+    }).returning()
+    expect(draft!.status).toBe('DRAFT')
   })
 })

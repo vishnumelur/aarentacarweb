@@ -15,11 +15,12 @@ export const customers = pgTable('customers', {
   // FR-14.2 — blacklisting always carries a reason
   isBlacklisted: boolean('is_blacklisted').notNull().default(false),
   blacklistReason: text('blacklist_reason'),
-  blacklistedByUserId: uuid('blacklisted_by_user_id').references(() => users.id),
+  blacklistedByUserId: uuid('blacklisted_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
   // FR-14.4 — never shown to the customer
   internalNotes: text('internal_notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+    .$onUpdate(() => new Date()),
 }, (t) => [
   check('blacklist_requires_reason', sql`
     ${t.isBlacklisted} = false OR ${t.blacklistReason} IS NOT NULL
@@ -35,7 +36,7 @@ export const customerDocuments = pgTable('customer_documents', {
   objectKey: text('object_key').notNull(),
   status: documentStatus('status').notNull().default('pending'),
   rejectionReason: text('rejection_reason'),
-  reviewedByUserId: uuid('reviewed_by_user_id').references(() => users.id),
+  reviewedByUserId: uuid('reviewed_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

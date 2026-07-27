@@ -31,7 +31,7 @@ export const bookings = pgTable('bookings', {
   vehicleId: uuid('vehicle_id').references(() => vehicles.id, { onDelete: 'restrict' }),
   // FR-17.7 — the rate card in force when the booking was made
   rateCardId: uuid('rate_card_id').notNull().references(() => rateCards.id, { onDelete: 'restrict' }),
-  promoCodeId: uuid('promo_code_id').references(() => promoCodes.id),
+  promoCodeId: uuid('promo_code_id').references(() => promoCodes.id, { onDelete: 'restrict' }),
   startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
   endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
   subtotalFils: integer('subtotal_fils').notNull(),
@@ -44,10 +44,11 @@ export const bookings = pgTable('bookings', {
   // version silently defeats the guarantee, and only in a dispute.
   termsVersion: text('terms_version').references(() => termsVersions.version),
   cancellationPolicy: text('cancellation_policy'),
-  createdByUserId: uuid('created_by_user_id').references(() => users.id),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+    .$onUpdate(() => new Date()),
 }, (t) => [
   index('bookings_status_start_idx').on(t.status, t.startsAt),
   index('bookings_customer_idx').on(t.customerId),
@@ -73,8 +74,8 @@ export const bookings = pgTable('bookings', {
 export const selfDriveDetails = pgTable('self_drive_details', {
   bookingId: uuid('booking_id').primaryKey()
     .references(() => bookings.id, { onDelete: 'cascade' }),
-  pickupBranchId: uuid('pickup_branch_id').notNull().references(() => branches.id),
-  returnBranchId: uuid('return_branch_id').notNull().references(() => branches.id),
+  pickupBranchId: uuid('pickup_branch_id').notNull().references(() => branches.id, { onDelete: 'restrict' }),
+  returnBranchId: uuid('return_branch_id').notNull().references(() => branches.id, { onDelete: 'restrict' }),
   includedKmTotal: integer('included_km_total').notNull(),
   deliveryAddress: text('delivery_address'),
   deliveryFeeFils: integer('delivery_fee_fils').notNull().default(0),

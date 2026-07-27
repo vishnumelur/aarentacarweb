@@ -61,7 +61,8 @@ describe('money schema', () => {
     const { booking } = await aBooking()
     const base = { bookingId: booking.id, method: 'card' as const, amountFils: 37800 }
     await db.insert(payments).values({ ...base, gatewayReference: 'telr-dup-1' })
-    await expect(db.insert(payments).values({ ...base, gatewayReference: 'telr-dup-1' })).rejects.toThrow()
+    await expect(db.insert(payments).values({ ...base, gatewayReference: 'telr-dup-1' }))
+      .rejects.toThrow(/payments_gateway_reference_unique/)
   })
 
   it('tracks a deposit hold through to release', async () => {
@@ -78,7 +79,7 @@ describe('money schema', () => {
     await expect(db.insert(depositHolds).values({
       bookingId: booking.id, amountFils: 150000, capturedFils: 200000,
       gatewayReference: 'telr-auth-2',
-    })).rejects.toThrow()
+    })).rejects.toThrow(/capture_within_hold/)
   })
 
   it('records a charge with a separate admin fee (FR-8.3)', async () => {
@@ -89,6 +90,15 @@ describe('money schema', () => {
     }).returning()
     expect(charge!.adminFeeFils).toBe(500)
     expect(charge!.isDisputed).toBe(false)
+  })
+
+  it('rejects an invoice whose totals do not add up (invoice_totals_consistent)', async () => {
+    const { booking, customer } = await aBooking()
+    await expect(db.insert(invoices).values({
+      bookingId: booking.id, customerId: customer.id,
+      // 36000 + 1800 = 37800, not 999
+      subtotalFils: 36000, vatFils: 1800, totalFils: 999,
+    })).rejects.toThrow(/invoice_totals_consistent/)
   })
 
   it('issues gapless sequential invoice numbers (FR-15.2)', async () => {
@@ -131,7 +141,7 @@ describe('money schema', () => {
         subtotalFils: 1000, vatFils: 50, totalFils: 1050,
       })
       throw new Error('simulated failure after allocating a number')
-    })).rejects.toThrow()
+    })).rejects.toThrow(/simulated failure after allocating a number/)
 
     const [next] = await db.insert(invoices).values({
       bookingId: booking.id, customerId: customer.id,
@@ -148,7 +158,8 @@ describe('money schema', () => {
       bookingId: booking.id, customerId: customer.id,
       subtotalFils: 36000, vatFils: 1800, totalFils: 37800,
     }).returning()
-    await expect(db.delete(invoices).where(eq(invoices.id, inv!.id))).rejects.toThrow()
+    await expect(db.delete(invoices).where(eq(invoices.id, inv!.id)))
+      .rejects.toThrow(/invoices are never deleted/)
   })
 
   it('requires a reason when voiding an invoice (FR-15.2)', async () => {
@@ -159,7 +170,7 @@ describe('money schema', () => {
     }).returning()
     await expect(
       db.update(invoices).set({ status: 'void' }).where(eq(invoices.id, inv!.id)),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/void_requires_reason/)
   })
 
   it('refuses a credit note pointing at an invoice that does not exist', async () => {
@@ -168,7 +179,7 @@ describe('money schema', () => {
       bookingId: booking.id, customerId: customer.id,
       subtotalFils: 1000, vatFils: 50, totalFils: 1050,
       creditsInvoiceId: crypto.randomUUID(),
-    })).rejects.toThrow()
+    })).rejects.toThrow(/invoices_credits_invoice_id_fk/)
   })
 
   it('rejects a payment amount of zero or less', async () => {
@@ -176,7 +187,7 @@ describe('money schema', () => {
     await expect(db.insert(payments).values({
       bookingId: booking.id, method: 'card', amountFils: 0,
       gatewayReference: 'telr-zero-1',
-    })).rejects.toThrow()
+    })).rejects.toThrow(/amount_positive/)
   })
 
   it('rejects a refund larger than the payment', async () => {
@@ -184,6 +195,6 @@ describe('money schema', () => {
     await expect(db.insert(payments).values({
       bookingId: booking.id, method: 'card', amountFils: 10000,
       refundedFils: 20000, gatewayReference: 'telr-overrefund-1',
-    })).rejects.toThrow()
+    })).rejects.toThrow(/refund_within_amount/)
   })
 })

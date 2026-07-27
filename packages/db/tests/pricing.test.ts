@@ -37,7 +37,7 @@ describe('pricing schema', () => {
     await expect(db.insert(rateCards).values({
       classId: cls.id, dailyRateFils: -1, depositFils: 100000,
       includedKmPerDay: 250, excessKmRateFils: 50, validFrom: '2026-01-01',
-    })).rejects.toThrow()
+    })).rejects.toThrow(/daily_rate_non_negative/)
   })
 
   it('stores weekly tiers as a discount above a day threshold', async () => {
@@ -92,7 +92,7 @@ describe('pricing schema', () => {
       code: 'WELCOME10', discountType: 'percent', discountValue: 5,
       validFrom: '2026-01-01', validTo: '2026-12-31',
       minBookingValueFils: 0, totalUsageCap: 10, perCustomerCap: 1,
-    })).rejects.toThrow()
+    })).rejects.toThrow(/promo_codes_code_unique/)
   })
 
   it('permits only one open-ended rate card per class (FR-17.7)', async () => {
@@ -104,7 +104,7 @@ describe('pricing schema', () => {
     await db.insert(rateCards).values({ ...base, validFrom: '2026-01-01' })
     await expect(
       db.insert(rateCards).values({ ...base, validFrom: '2026-06-01' }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/rate_cards_one_current_per_class/)
     // A closed-ended card alongside a current one is fine.
     await expect(
       db.insert(rateCards).values({ ...base, validFrom: '2025-01-01', validTo: '2025-12-31' }),

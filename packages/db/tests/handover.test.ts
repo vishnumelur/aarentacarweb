@@ -67,7 +67,7 @@ describe('handover schema', () => {
       fuelLevelEighths: 8, conductedByUserId: staff.id,
     }
     await db.insert(handovers).values(base)
-    await expect(db.insert(handovers).values(base)).rejects.toThrow()
+    await expect(db.insert(handovers).values(base)).rejects.toThrow(/handover_active_unique/)
   })
 
   it('rejects a fuel level outside 0 to 8 eighths', async () => {
@@ -75,7 +75,7 @@ describe('handover schema', () => {
     await expect(db.insert(handovers).values({
       bookingId: booking.id, kind: 'return', odometerKm: 20500,
       fuelLevelEighths: 9, conductedByUserId: staff.id,
-    })).rejects.toThrow()
+    })).rejects.toThrow(/fuel_eighths_range/)
   })
 
   it('defaults the capture timestamp server-side', async () => {
@@ -111,7 +111,8 @@ describe('handover schema', () => {
       bookingId: booking.id, kind: 'pickup', odometerKm: 20000,
       fuelLevelEighths: 8, conductedByUserId: staff.id,
     }).returning()
-    await expect(db.delete(handovers).where(eq(handovers.id, h!.id))).rejects.toThrow()
+    await expect(db.delete(handovers).where(eq(handovers.id, h!.id)))
+      .rejects.toThrow(/handovers are append-only: supersede the record, never delete it/)
   })
 
   it('refuses to edit a handover in place (NFR-11)', async () => {
@@ -122,7 +123,7 @@ describe('handover schema', () => {
     }).returning()
     await expect(
       db.update(handovers).set({ odometerKm: 99999 }).where(eq(handovers.id, h!.id)),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/handovers are append-only: only superseded_by_id may change/)
   })
 
   it('supports the supersede workflow within one transaction (NFR-11)', async () => {
@@ -167,7 +168,7 @@ describe('handover schema', () => {
       db.update(handovers)
         .set({ supersededById: crypto.randomUUID() })
         .where(eq(handovers.id, h!.id)),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/handovers_superseded_by_id_fk/)
   })
 
   it('overrides a client-supplied capture timestamp with the server clock (NFR-11)', async () => {
@@ -199,9 +200,9 @@ describe('handover schema', () => {
     await expect(
       db.update(inspectionPhotos).set({ objectKey: 'tampered.jpg' })
         .where(eq(inspectionPhotos.id, photo!.id)),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/immutable evidence/)
     await expect(
       db.delete(inspectionPhotos).where(eq(inspectionPhotos.id, photo!.id)),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/immutable evidence/)
   })
 })

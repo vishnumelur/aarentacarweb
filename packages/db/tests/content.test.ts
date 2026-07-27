@@ -55,7 +55,8 @@ describe('settings and content schema', () => {
 
   it('rejects a duplicate setting key', async () => {
     await db.insert(settings).values({ key: 'company_trn', value: '100123456700003' })
-    await expect(db.insert(settings).values({ key: 'company_trn', value: 'other' })).rejects.toThrow()
+    await expect(db.insert(settings).values({ key: 'company_trn', value: 'other' }))
+      .rejects.toThrow(/duplicate key value/)
   })
 
   it('stores an editable legal page', async () => {
@@ -81,7 +82,7 @@ describe('settings and content schema', () => {
     await db.insert(termsVersions).values({ version: 'v2.0', body: 'x', effectiveFrom: '2026-01-01' })
     await expect(
       db.insert(termsVersions).values({ version: 'v2.0', body: 'y', effectiveFrom: '2026-02-01' }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/terms_versions_version_unique/)
   })
 
   it('refuses a booking pinning a terms version that does not exist (FR-22.2)', async () => {
@@ -93,7 +94,7 @@ describe('settings and content schema', () => {
       endsAt: new Date('2026-08-03T08:00:00Z'),
       subtotalFils: 24000, vatFils: 1200, totalFils: 25200, depositFils: 100000,
       termsVersion: 'v99.0',
-    })).rejects.toThrow()
+    })).rejects.toThrow(/bookings_terms_version_terms_versions_version_fk/)
   })
 
   it('accepts a booking pinning a terms version that exists (FR-22.2)', async () => {

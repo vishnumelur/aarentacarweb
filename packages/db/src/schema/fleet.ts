@@ -72,7 +72,8 @@ export const vehicles = pgTable('vehicles', {
   status: vehicleStatus('status').notNull().default('available'),
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+    .$onUpdate(() => new Date()),
 }, (t) => [
   index('vehicles_class_idx').on(t.classId),
   index('vehicles_branch_status_idx').on(t.branchId, t.status),
@@ -115,6 +116,6 @@ export const maintenanceJobs = pgTable('maintenance_jobs', {
   endsOn: date('ends_on'),
   costFils: integer('cost_fils').notNull().default(0),
   odometerKm: integer('odometer_km'),
-  createdByUserId: uuid('created_by_user_id').references(() => users.id),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('maintenance_vehicle_status_idx').on(t.vehicleId, t.status)])

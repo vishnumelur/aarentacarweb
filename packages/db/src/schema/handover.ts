@@ -61,7 +61,7 @@ export const damageMarkers = pgTable('damage_markers', {
   yPercent: integer('y_percent').notNull(),
   severity: damageSeverity('severity').notNull(),
   notes: text('notes'),
-  photoId: uuid('photo_id').references(() => inspectionPhotos.id),
+  photoId: uuid('photo_id').references(() => inspectionPhotos.id, { onDelete: 'restrict' }),
 }, (t) => [
   index('damage_markers_handover_idx').on(t.handoverId),
   check('x_percent_range', sql`${t.xPercent} BETWEEN 0 AND 100`),

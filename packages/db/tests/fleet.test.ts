@@ -50,7 +50,7 @@ describe('fleet schema', () => {
     const branch = await seedBranch()
     await expect(
       db.insert(branchHours).values({ branchId: branch.id, weekday: 1, opensAt: '21:00', closesAt: '08:00' }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/opens_before_closes/)
   })
 
   it('stores a vehicle with a unique registration and defaults to available', async () => {
@@ -78,7 +78,8 @@ describe('fleet schema', () => {
       year: 2023, colour: 'Silver', odometerKm: 1000, acquisitionCostFils: 7000000,
     }
     await db.insert(vehicles).values({ ...base, registration: 'B-99999' })
-    await expect(db.insert(vehicles).values({ ...base, registration: 'B-99999' })).rejects.toThrow()
+    await expect(db.insert(vehicles).values({ ...base, registration: 'B-99999' }))
+      .rejects.toThrow(/vehicles_registration_unique/)
   })
 
   it('records vehicle documents with expiry so a vehicle can be auto-blocked', async () => {
@@ -108,6 +109,6 @@ describe('fleet schema', () => {
     })
     await expect(
       db.delete(vehicles).where(eq(vehicles.id, vehicle!.id)),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/vehicle_documents_vehicle_id_vehicles_id_fk/)
   })
 })

@@ -4,7 +4,7 @@
   "packageManager": "pnpm@9.12.0",
   "engines": { "node": ">=24.0.0" },
   "scripts": {
-    "typecheck": "turbo run typecheck",
+    "typecheck": "tsc --noEmit && turbo run typecheck",
     "test": "vitest run && turbo run test",
     "build": "turbo run build",
     "lint": "turbo run lint",

@@ -31,7 +31,7 @@ export const payments = pgTable('payments', {
   // FR-4.5 — unique, so a replayed webhook cannot double-charge
   gatewayReference: text('gateway_reference').unique(),
   gatewayName: text('gateway_name'),
-  receivedByUserId: uuid('received_by_user_id').references(() => users.id),
+  receivedByUserId: uuid('received_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('payments_booking_idx').on(t.bookingId),
@@ -68,7 +68,7 @@ export const charges = pgTable('charges', {
   // Deliberately independent of isDisputed: a settled charge can later be disputed
   // and charged back, so both flags may legitimately be true at once.
   isSettled: boolean('is_settled').notNull().default(false),
-  createdByUserId: uuid('created_by_user_id').references(() => users.id),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('charges_booking_idx').on(t.bookingId),
@@ -81,7 +81,10 @@ export const charges = pgTable('charges', {
 // deleted (enforced by a trigger in 0010).
 export const invoices = pgTable('invoices', {
   id: uuid('id').primaryKey().defaultRandom(),
-  number: integer('number').notNull().unique(),
+  // FR-15.2 — allocated by next_invoice_number() in migration 0010. The .default() tells
+  // Drizzle the column is optional on insert; without it, callers are forced to supply a
+  // number and would bypass gapless allocation.
+  number: integer('number').notNull().unique().default(sql`next_invoice_number()`),
   bookingId: uuid('booking_id').notNull().references(() => bookings.id, { onDelete: 'restrict' }),
   customerId: uuid('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
   status: invoiceStatus('status').notNull().default('issued'),
@@ -99,4 +102,7 @@ export const invoices = pgTable('invoices', {
   check('invoice_totals_non_negative', sql`
     ${t.subtotalFils} >= 0 AND ${t.vatFils} >= 0 AND ${t.totalFils} >= 0`),
   check('void_requires_reason', sql`${t.status} <> 'void' OR ${t.voidReason} IS NOT NULL`),
+  // Same discipline as bookings.totals_consistent — an invoice whose figures do not add
+  // up is a document you cannot defend to a customer or an auditor.
+  check('invoice_totals_consistent', sql`${t.totalFils} = ${t.subtotalFils} + ${t.vatFils}`),
 ])

@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
-import { users, customers, customerDocuments } from '../src/schema/index.js'
+import { users, customers, customerDocuments, branches } from '../src/schema/index.js'
 import { withTestDb } from './db.js'
 
 const db = withTestDb()
 
 describe('identity and customer schema', () => {
   beforeEach(async () => {
-    await db.execute(sql`TRUNCATE TABLE customer_documents, customers, users RESTART IDENTITY CASCADE`)
+    await db.execute(sql`
+      TRUNCATE TABLE customer_documents, customers, users, branches RESTART IDENTITY CASCADE`)
   })
 
   it('stores a user with a role and a unique phone', async () => {
@@ -22,7 +23,7 @@ describe('identity and customer schema', () => {
     await db.insert(users).values({ phone: '+971501111111', role: 'customer', fullName: 'A' })
     await expect(
       db.insert(users).values({ phone: '+971501111111', role: 'customer', fullName: 'B' }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/users_phone_unique/)
   })
 
   it('defaults a customer to not blacklisted and requires a reason when blacklisting', async () => {
@@ -33,7 +34,7 @@ describe('identity and customer schema', () => {
 
     await expect(
       db.update(customers).set({ isBlacklisted: true }).where(eq(customers.id, customer!.id)),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/blacklist_requires_reason/)
   })
 
   it('accepts a blacklist with a reason', async () => {
@@ -44,6 +45,26 @@ describe('identity and customer schema', () => {
       .set({ isBlacklisted: true, blacklistReason: 'Repeated non-payment' })
       .where(eq(customers.id, customer!.id)).returning()
     expect(updated!.isBlacklisted).toBe(true)
+  })
+
+  it('rejects a user whose branch does not exist (users_branch_id_fk, migration 0015)', async () => {
+    await expect(
+      db.insert(users).values({
+        phone: '+971505550000', role: 'staff', fullName: 'Ghost Branch Staff',
+        branchId: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow(/users_branch_id_fk/)
+  })
+
+  it('accepts a user scoped to a real branch', async () => {
+    const [branch] = await db.insert(branches).values({
+      name: 'Al Karama', slug: 'al-karama', addressLine: 'Khalifa bin Zayed Street',
+      phone: '+971503377877',
+    }).returning()
+    const [user] = await db.insert(users).values({
+      phone: '+971505550001', role: 'staff', fullName: 'Branch Staff', branchId: branch!.id,
+    }).returning()
+    expect(user!.branchId).toBe(branch!.id)
   })
 
   it('stores a KYC document with an expiry and a pending status', async () => {
