@@ -53,7 +53,9 @@ export async function seed(db: Db): Promise<void> {
   for (const branch of branches) {
     await db.insert(s.branchHours)
       .values(WEEKLY_HOURS.map((h) => ({ ...h, branchId: branch.id })))
-      .onConflictDoNothing()
+      .onConflictDoNothing({
+        target: [s.branchHours.branchId, s.branchHours.weekday, s.branchHours.opensAt],
+      })
   }
 
   // Vehicle classes and one rate card each

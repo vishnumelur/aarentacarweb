@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { eq, sql } from 'drizzle-orm'
 import { seed } from '../src/seed.js'
 import {
-  branches, branchHours, vehicleClasses, vehicles, rateCards, users, addons,
+  branches, branchHours, vehicleClasses, vehicles, rateCards, users, customers, addons,
   settings, contentPages, termsVersions,
 } from '../src/schema/index.js'
 import { withTestDb } from './db.js'
@@ -82,11 +82,25 @@ describe('seed script', () => {
     expect(await db.select().from(contentPages)).toHaveLength(5)
   })
 
-  it('is idempotent — running twice does not duplicate rate cards or vehicle classes', async () => {
+  // Every table the seed writes, not just the two the brief's test checks above.
+  // branch_hours in particular has no natural place in that test but is exactly
+  // the table whose onConflictDoNothing() silently did nothing without an explicit
+  // target — a bare re-run doubled it from 16 rows to 32 and nothing caught it.
+  it('is fully idempotent — a second run changes no row count', async () => {
+    const tables = {
+      branches, branchHours, vehicleClasses, rateCards, vehicles,
+      addons, users, customers, termsVersions, contentPages, settings,
+    }
+    const countAll = async () => {
+      const out: Record<string, number> = {}
+      for (const [name, table] of Object.entries(tables)) {
+        out[name] = (await db.select().from(table)).length
+      }
+      return out
+    }
+    const before = await countAll()
     await seed(db)
-    const classes = await db.select().from(vehicleClasses)
-    const cards = await db.select().from(rateCards)
-    expect(classes).toHaveLength(7)
-    expect(cards).toHaveLength(7)
+    const after = await countAll()
+    expect(after).toEqual(before)
   })
 })

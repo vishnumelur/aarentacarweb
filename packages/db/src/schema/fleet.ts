@@ -37,6 +37,10 @@ export const branchHours = pgTable('branch_hours', {
   closesAt: time('closes_at').notNull(),
 }, (t) => [
   index('branch_hours_branch_idx').on(t.branchId, t.weekday),
+  // Without this, the seed's onConflictDoNothing() has no arbiter to match and silently
+  // becomes a no-op — every reseed doubles the opening hours, and duplicated intervals
+  // produce duplicated booking time slots.
+  unique('branch_hours_unique').on(t.branchId, t.weekday, t.opensAt),
   check('weekday_range', sql`${t.weekday} BETWEEN 0 AND 6`),
   check('opens_before_closes', sql`${t.opensAt} < ${t.closesAt}`),
 ])
