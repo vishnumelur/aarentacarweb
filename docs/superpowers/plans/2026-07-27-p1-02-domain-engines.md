@@ -557,8 +557,8 @@ git commit -m "feat(shared): add booking state machine as a pure function"
   - `type RateCard = { id: string; classId: string; dailyRateFils: number; depositFils: number; includedKmPerDay: number; excessKmRateFils: number; validFrom: string; validTo: string | null }`
   - `type WeeklyTier = { rateCardId: string; minDays: number; discountBps: number }`
   - `type SeasonalRate = { classId: string; name: string; startsOn: string; endsOn: string; multiplierBps: number; priority: number }`
-  - `resolveRateCard(cards: readonly RateCard[], onDate: string): RateCard | null`
-  - `resolveSeasonalRate(rules: readonly SeasonalRate[], onDate: string): SeasonalRate | null`
+  - `resolveRateCard(cards: readonly RateCard[], classId: string, onDate: string): RateCard | null`
+  - `resolveSeasonalRate(rules: readonly SeasonalRate[], classId: string, onDate: string): SeasonalRate | null`
   - `resolveWeeklyTier(tiers: readonly WeeklyTier[], days: number): WeeklyTier | null`
 
 Dates are `YYYY-MM-DD` strings throughout, matching the database's `date` columns. Implements FR-17.2 and FR-17.7.
@@ -1116,7 +1116,7 @@ function rentalDays(startDate: string, endDate: string): number {
 export function quote(input: QuoteInput): QuoteResult {
   const days = rentalDays(input.startDate, input.endDate)
 
-  const card = resolveRateCard(input.rateCards, input.startDate)
+  const card = resolveRateCard(input.rateCards, input.classId, input.startDate)
   if (card === null) {
     throw new Error(
       `No rate card covers ${input.startDate} for class ${input.classId}. ` +
@@ -1124,7 +1124,7 @@ export function quote(input: QuoteInput): QuoteResult {
     )
   }
 
-  const seasonal = resolveSeasonalRate(input.seasonalRates, input.startDate)
+  const seasonal = resolveSeasonalRate(input.seasonalRates, input.classId, input.startDate)
   const rawBase = card.dailyRateFils * days
   const baseFils = seasonal === null
     ? rawBase
