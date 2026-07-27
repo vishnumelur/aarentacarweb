@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import net from 'node:net'
 import { existsSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
