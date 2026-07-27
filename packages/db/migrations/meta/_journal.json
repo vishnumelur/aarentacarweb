@@ -15,6 +15,13 @@
       "when": 1785156808568,
       "tag": "0001_lowly_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785157409274,
+      "tag": "0002_remarkable_baron_strucker",
+      "breakpoints": true
     }
   ]
 }

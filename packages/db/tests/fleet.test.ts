@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { branches, branchHours, vehicleClasses, vehicles, vehicleDocuments } from '../src/schema/index.js'
 import { withTestDb } from './db.js'
 
@@ -93,5 +93,21 @@ describe('fleet schema', () => {
       vehicleId: vehicle!.id, type: 'mulkiya', expiresOn: '2027-06-30',
     }).returning()
     expect(doc!.type).toBe('mulkiya')
+  })
+
+  it('refuses to delete a vehicle that still has compliance records (FR-7.2)', async () => {
+    const branch = await seedBranch()
+    const cls = await seedClass()
+    const [vehicle] = await db.insert(vehicles).values({
+      registration: 'G-55555', classId: cls.id, branchId: branch.id,
+      make: 'Nissan', model: 'Sunny', year: 2023, colour: 'White',
+      odometerKm: 100, acquisitionCostFils: 5500000,
+    }).returning()
+    await db.insert(vehicleDocuments).values({
+      vehicleId: vehicle!.id, type: 'insurance', expiresOn: '2027-01-31',
+    })
+    await expect(
+      db.delete(vehicles).where(eq(vehicles.id, vehicle!.id)),
+    ).rejects.toThrow()
   })
 })
