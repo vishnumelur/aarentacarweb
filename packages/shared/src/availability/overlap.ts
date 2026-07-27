@@ -34,6 +34,12 @@ export interface ExistingBooking {
 export function rangesOverlap(
   aStart: Date, aEnd: Date, bStart: Date, bEnd: Date,
 ): boolean {
+  // Postgres canonicalises tstzrange(t, t) to empty, and empty overlaps nothing.
+  // Matching that matters: migration 0017's exclusion constraint is the backstop for
+  // this function, and the two must agree or a booking this permits gets rejected by
+  // the database as a raw error.
+  if (aStart.getTime() >= aEnd.getTime()) return false
+  if (bStart.getTime() >= bEnd.getTime()) return false
   return aStart.getTime() < bEnd.getTime() && bStart.getTime() < aEnd.getTime()
 }
 

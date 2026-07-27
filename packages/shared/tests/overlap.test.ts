@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it, expect } from 'vitest'
 import {
   VEHICLE_HOLDING_STATUSES, holdsVehicle, rangesOverlap, findConflictingBookings,
@@ -19,6 +21,22 @@ describe('which statuses hold a vehicle', () => {
     )
   })
 
+  // This is the only test file in packages/shared permitted to touch the filesystem.
+  // It is a build-time consistency check between two packages (this constant vs. the
+  // SQL migration's status filter), not runtime logic, so it does not violate the
+  // no-I/O rule that applies to src/. Do not "fix" this by deleting the file read.
+  it('matches migration 0017 read from disk, not a hardcoded copy', () => {
+    const sql = readFileSync(
+      resolve(import.meta.dirname, '../../db/migrations/0017_bookings_no_vehicle_overlap.sql'),
+      'utf8',
+    )
+    // Pull the statuses out of the constraint's WHERE ... status IN (...) clause.
+    const inClause = sql.match(/"status"\s+IN\s*\(([^)]*)\)/i)?.[1]
+    expect(inClause, 'could not find the status IN clause in migration 0017').toBeDefined()
+    const fromSql = [...inClause!.matchAll(/'([A-Z_]+)'/g)].map((m) => m[1]!).sort()
+    expect(fromSql).toEqual([...VEHICLE_HOLDING_STATUSES].sort())
+  })
+
   it('does not hold a vehicle before confirmation or after return', () => {
     for (const s of ['DRAFT', 'PENDING_PAYMENT', 'RETURNED', 'CLOSING',
       'COMPLETED', 'CANCELLED', 'NO_SHOW', 'EXPIRED'] as BookingStatus[]) {
@@ -26,8 +44,21 @@ describe('which statuses hold a vehicle', () => {
     }
   })
 
-  it('classifies every status without throwing', () => {
-    for (const s of BOOKING_STATUSES) expect(typeof holdsVehicle(s)).toBe('boolean')
+  it('classifies all 17 statuses explicitly, with no untested value', () => {
+    const expected: Record<BookingStatus, boolean> = {
+      DRAFT: false, PENDING_PAYMENT: false,
+      CONFIRMED: true, DOCS_VERIFIED: true, READY_FOR_PICKUP: true, OUT: true,
+      RETURNED: false, CLOSING: false, COMPLETED: false,
+      CANCELLED: false, NO_SHOW: false, EXPIRED: false,
+      // Chauffeur dispatch (P2). A chauffeur booking's vehicle is held by the
+      // underlying self-drive-style reservation, not by the trip state, so none
+      // of these hold a vehicle on their own. Confirmed against migration 0017:
+      // none of these five appear in its status filter.
+      ASSIGNED: false, EN_ROUTE: false, ARRIVED: false, IN_TRIP: false, DROPPED: false,
+    }
+    for (const status of BOOKING_STATUSES) {
+      expect(holdsVehicle(status), `${status}`).toBe(expected[status])
+    }
   })
 })
 
@@ -69,6 +100,20 @@ describe('range overlap', () => {
       d('2026-08-01T00:00:00Z'), d('2026-08-05T00:00:00Z'),
       d('2026-08-01T00:00:00Z'), d('2026-08-05T00:00:00Z'),
     )).toBe(true)
+  })
+
+  it('treats a zero-length range as empty, matching Postgres tstzrange(t, t)', () => {
+    const t = d('2026-08-03T00:00:00Z')
+    // A zero-length range overlaps nothing, even an instant strictly inside another range.
+    expect(rangesOverlap(t, t, d('2026-08-01T00:00:00Z'), d('2026-08-05T00:00:00Z'))).toBe(false)
+    expect(rangesOverlap(d('2026-08-01T00:00:00Z'), d('2026-08-05T00:00:00Z'), t, t)).toBe(false)
+  })
+
+  it('treats an inverted range as empty rather than silently matching', () => {
+    expect(rangesOverlap(
+      d('2026-08-05T00:00:00Z'), d('2026-08-01T00:00:00Z'),
+      d('2026-08-02T00:00:00Z'), d('2026-08-04T00:00:00Z'),
+    )).toBe(false)
   })
 
   it('is symmetric for every case', () => {
