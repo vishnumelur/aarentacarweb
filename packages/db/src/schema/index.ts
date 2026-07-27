@@ -2,3 +2,4 @@
 export * from './identity'
 export * from './customer'
 export * from './fleet'
+export * from './pricing'
