@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  isWithinOpeningHours, dubaiWeekday, dubaiTimeOfDay, type OpeningInterval,
+  isWithinOpeningHours, dubaiWeekday, dubaiTimeOfDay, dubaiDate, type OpeningInterval,
 } from '../src/availability/opening-hours.js'
 
 // The real AA Rentals schedule: Sat-Thu 08:00-21:30, Fri 08:30-12:00 and 17:00-21:30.
@@ -30,6 +30,19 @@ describe('Dubai timezone helpers', () => {
     expect(dubaiTimeOfDay(new Date('2026-08-01T04:00:00Z'))).toBe('08:00')
     expect(dubaiTimeOfDay(new Date('2026-08-01T17:30:00Z'))).toBe('21:30')
     expect(dubaiTimeOfDay(new Date('2026-08-01T20:00:00Z'))).toBe('00:00')
+  })
+
+  it('renders the Dubai date as YYYY-MM-DD, the shape every date comparison assumes', () => {
+    // en-CA conventionally formats ISO-like, but that is a locale convention, not a
+    // guarantee. Every date comparison in the availability engine assumes this shape;
+    // if it ever changed, maintenance and expiry checks would silently stop matching.
+    expect(dubaiDate(new Date('2026-08-03T22:00:00Z'))).toBe('2026-08-04')
+    expect(dubaiDate(new Date('2026-08-03T18:00:00Z'))).toBe('2026-08-03')
+    expect(dubaiDate(new Date('2026-01-01T00:00:00Z'))).toBe('2026-01-01')
+    expect(dubaiDate(new Date('2026-12-31T20:00:00Z'))).toBe('2027-01-01')
+    for (const iso of ['2026-08-03T22:00:00Z', '2026-02-28T23:59:00Z', '2026-11-05T00:00:00Z']) {
+      expect(dubaiDate(new Date(iso))).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    }
   })
 })
 

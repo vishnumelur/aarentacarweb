@@ -64,3 +64,6 @@ jobs:
             echo "::error::Expected at least 80 database tests, got $COUNT. CI is not testing the schema."
             exit 1
           fi
+
+      - name: Enforce domain engine coverage (NFR-9)
+        run: pnpm --filter @aa/shared test:coverage
