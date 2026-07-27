@@ -38,7 +38,7 @@ Copied verbatim from the spec. Every task inherits these.
 - Create: `tsconfig.base.json`
 - Create: `.nvmrc`
 - Create: `vitest.config.ts`
-- Create: `.github/workflows/ci.yml` (stub, extended in Task 11)
+- Create: `.github/workflows/ci.yml` (stub, extended in Task 12)
 
 **Interfaces:**
 - Consumes: nothing (first task)
