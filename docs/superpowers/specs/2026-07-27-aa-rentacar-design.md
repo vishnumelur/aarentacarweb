@@ -474,6 +474,161 @@ Screen 15 spans P1 and P3 — the About, FAQ and Contact pages ship in P1; the b
    parks and airport levels routinely lose signal.
 4. Push notifications mirror the transactional set in FR-10.
 
+### FR-13 Authentication & account management
+1. Customers register with a UAE or international mobile number verified by OTP; email is
+   optional and secondary. Phone is the primary identifier because this market is phone-first.
+2. Login by phone OTP, or by email and password where a password has been set.
+3. OTP codes expire after 5 minutes, are limited to 5 attempts, and are rate-limited per number
+   and per IP.
+4. Guest checkout creates a claimable account on confirmation; the customer sets credentials
+   on first login without losing the booking.
+5. Password reset by emailed single-use token expiring in 30 minutes.
+6. Staff, chauffeur and owner accounts are created by an administrator, never self-registered.
+7. Sessions expire after 30 days of inactivity for customers, 12 hours for staff and owner.
+8. A customer may export all personal data held about them, and request deletion. Deletion
+   anonymises rather than removes where financial records must be retained (NFR-4), replacing
+   identifying fields while preserving the transaction.
+9. Account lockout after 10 failed attempts, released by staff or after 30 minutes.
+
+### FR-14 Customer records
+1. Staff view a customer's full history: bookings, payments, charges, documents, disputes.
+2. Customers can be flagged as blacklisted with a mandatory reason and the staff member
+   recorded. A blacklisted customer cannot complete a booking; the block surfaces at checkout
+   and on walk-in creation.
+3. Duplicate customer records can be merged, moving all bookings, documents and charges to the
+   surviving record.
+4. Staff may add internal notes to a customer, never visible to that customer.
+5. Customer records are branch-visible but not branch-scoped — a customer served at Al Karama
+   is recognised at Dubai Media City.
+
+### FR-15 Invoicing & financial records
+1. A tax invoice is generated on booking completion, itemising rental, addons, charges,
+   discounts and 5% VAT, and carrying the company TRN.
+2. Invoice numbers are sequential and gapless per UAE requirements; a voided invoice retains
+   its number and is marked void rather than deleted.
+3. Credit notes are issued for refunds and reference the original invoice.
+4. Monthly lease bookings generate an invoice per billing period, not one at completion.
+5. Invoices are downloadable as PDF by the customer and by staff, and are immutable once issued.
+6. A financial export (CSV) covering invoices, payments and refunds for a date range is
+   available to the owner for accounting handoff.
+
+### FR-16 Monthly lease & recurring billing (P2)
+1. Lease bookings carry a term of 1–12 months and a monthly rate distinct from daily rates.
+2. Billing runs on a schedule: an invoice and payment attempt per period, not a single upfront
+   capture.
+3. A failed recurring payment retries on a defined schedule and escalates to staff, and after a
+   configurable grace period flags the booking for recovery.
+4. Included mileage is defined per month; excess is charged at a per-kilometre rate at each
+   billing period.
+5. Scheduled servicing during a lease is arranged without terminating the booking, with a
+   replacement vehicle optionally assigned.
+6. Early termination applies a configurable penalty and settles the final period pro rata.
+
+### FR-17 Catalogue & pricing administration
+1. Staff with the appropriate permission manage rate cards per vehicle class: daily rate,
+   weekly tier thresholds and discounts, monthly rate, deposit amount and included mileage.
+2. Seasonal rate rules are defined by date range and vehicle class, and override base rates
+   for the period. Overlapping rules resolve by explicit priority, not by creation order.
+3. Addons are managed as a catalogue: name, price, price model (per day or per booking),
+   applicable products, and stock limit where physical (child seats).
+4. Promo codes carry a discount type and value, validity window, applicable products, minimum
+   booking value, total usage cap and per-customer cap.
+5. Chauffeur packages and transfer routes are managed with their own rates and rules.
+6. Vehicle classes are a managed table, not a hardcoded enum.
+7. Every pricing change is versioned; a booking retains the rates that applied when it was
+   made, so historic bookings never change price retroactively.
+
+### FR-18 Branches, system configuration & integrations
+1. Branches carry address, geolocation, contact numbers, and opening hours as a list of
+   intervals per weekday (per NFR-5, Friday has two).
+2. Bookings can only be picked up or returned within a branch's opening intervals.
+3. Cross-branch pickup and return is supported, with an optional one-way fee.
+4. Delivery zones are defined per branch with a radius or polygon and a delivery fee.
+5. System settings cover company details, TRN, VAT rate, booking policies (cancellation
+   windows, no-show rules, minimum rental age, minimum licence-held duration), and branding.
+6. Integration credentials — payment gateway, SMS, WhatsApp, email, Tabby — are configured in
+   the owner portal, stored encrypted at rest, and are write-only in the UI (never displayed
+   back after saving).
+7. A connection test is available for each integration.
+
+### FR-19 Reporting & analytics
+1. The executive dashboard shows, for a selectable period: total revenue, booking count,
+   fleet utilisation percentage, average daily rate, and a count of vehicles at risk (expiring
+   documents, overdue returns, in workshop).
+2. Revenue reports break down by branch, vehicle class, product type and payment method.
+3. Fleet ROI reports show, per vehicle: acquisition cost, cumulative revenue, maintenance cost,
+   idle days, utilisation percentage, and a computed payback position.
+4. Utilisation analytics show idle days per vehicle and a demand heatmap by date.
+5. Booking funnel reports show source, channel, conversion rate and abandonment stage.
+6. Customer analytics show repeat rate, lifetime value and acquisition channel.
+7. Staff and chauffeur performance reports show bookings handled, trips completed and, for
+   chauffeurs, on-time arrival rate.
+8. Every report is exportable to CSV and filterable by date range and branch.
+9. Reports read from the primary database in P1. If report queries begin degrading transaction
+   performance, they move to a read replica — the schema must not preclude that.
+
+### FR-20 Support & disputes
+1. Customers raise a support ticket from a booking or standalone, with an optional attachment.
+2. A customer may dispute a specific charge; the disputed charge is flagged and excluded from
+   automatic deposit capture until resolved.
+3. Staff see a ticket queue with status, assignee and age, and reply within the thread.
+4. Ticket correspondence is recorded against the booking and the customer.
+5. Resolution records an outcome and, where applicable, a refund or charge reversal.
+
+### FR-21 Staff & chauffeur administration
+1. Staff and chauffeur profiles carry role, assigned branch, contact details and employment
+   status.
+2. Chauffeur profiles additionally carry licence details with expiry; an expired licence
+   removes them from the assignable pool automatically.
+3. Chauffeur shifts are scheduled per branch; availability derives from the roster.
+4. Chauffeurs view their own trip log and computed earnings for a period, including overtime.
+5. Chauffeurs submit expenses (fuel, parking, Salik) with a photographed receipt; staff approve
+   or reject, and approved expenses appear in owner expense reports.
+6. Deactivating a staff or chauffeur account revokes sessions immediately and reassigns open work.
+
+### FR-22 Content management
+1. Legal pages (terms, privacy, rental agreement, insurance and liability, cancellation policy)
+   are editable by the owner without a deployment.
+2. The version of the rental agreement in force at booking time is captured with the booking,
+   so a contract can always be reproduced as the customer accepted it.
+3. FAQ entries, About and Contact content are editable.
+4. Blog posts (P3) support title, slug, body, featured image, meta description and publish date.
+5. Vehicle marketing content — description, feature list, photo gallery, display order — is
+   editable per vehicle and per class.
+6. Offers and deals pages are assembled from promo codes plus editorial content.
+
+---
+
+## 6a. Requirement coverage
+
+Every screen traces to at least one functional requirement. Reverse trace confirms no
+requirement lacks a screen.
+
+| FR | Covers screens |
+|---|---|
+| FR-1 Search & availability | 1, 2, 3 |
+| FR-2 Pricing & quoting | 3, 4, 9, 10, 11, 13 |
+| FR-3 Booking lifecycle | 8, 18, 19, 20, 21, 43, 44, 45 |
+| FR-4 Payments & deposits | 7, 23, 25, 26, 62 |
+| FR-5 Customer documents | 6, 22, 58 |
+| FR-6 Handover & inspection | 35, 48, 49, 61 |
+| FR-7 Fleet management | 46, 50, 51, 52, 53, 54, 55 |
+| FR-8 Charges | 24, 59, 60, 61 |
+| FR-9 Chauffeur dispatch | 11, 31, 32, 33, 34, 47, 64 |
+| FR-10 Notifications | 28, 40, 42 |
+| FR-11 Roles & access | 41, 80, 83 |
+| FR-12 Mobile app parity | 16–40 as native |
+| FR-13 Authentication | 5, 16, 27, 30 |
+| FR-14 Customer records | 56, 57 |
+| FR-15 Invoicing | 23, 63 |
+| FR-16 Lease & recurring billing | 9, 19 |
+| FR-17 Catalogue & pricing admin | 65, 66, 67, 68, 69 |
+| FR-18 Branches & configuration | 12, 70, 81, 82 |
+| FR-19 Reporting & analytics | 17, 42, 72, 73, 74, 75, 76, 77, 78, 79 |
+| FR-20 Support & disputes | 29, 71 |
+| FR-21 Staff & chauffeur admin | 36, 37, 38, 39, 64 |
+| FR-22 Content management | 14, 15 |
+
 ---
 
 ## 7. Non-functional requirements
@@ -559,6 +714,72 @@ Screen 15 spans P1 and P3 — the About, FAQ and Contact pages ship in P1; the b
 - Indexed for the known hot paths: availability by vehicle and date range, bookings by status
   and date, charges by booking.
 
+### NFR-11 Evidentiary integrity
+This system produces the evidence that decides damage disputes and insurance claims. That
+places obligations ordinary CRUD does not have.
+
+- Inspection photographs are stored unmodified. Derived thumbnails are separate objects; the
+  original is never overwritten. Bucket versioning is enabled (runbook §4).
+- Every photograph records capture timestamp, uploading user and booking reference at write
+  time, server-side. Client-supplied timestamps are not trusted.
+- Customer e-signatures capture the signature image, timestamp, IP address and the exact
+  version of the terms agreed to.
+- The generated contract PDF is immutable once signed. Corrections are issued as an addendum,
+  never by regenerating the original.
+- Handover records cannot be deleted, only superseded, and the audit log retains who changed
+  what.
+
+### NFR-12 Data retention & archival
+- Financial records (invoices, payments, refunds) retained 5 years minimum per UAE tax law.
+- Rental agreements and handover records retained 5 years.
+- KYC documents retained for the duration of the customer relationship plus 2 years, then
+  purged. Retention is enforced by a scheduled job, not by manual discipline.
+- Inspection photographs retained at full resolution 12 months, then downscaled; metadata
+  retained in full for the record's lifetime.
+- Deletion requests under PDPL anonymise rather than erase where retention law conflicts
+  (see FR-13.8).
+
+### NFR-13 API versioning & client compatibility
+- The API is versioned in the path (`/api/v1`). Breaking changes require `/api/v2`.
+- **Mobile clients cannot be force-updated.** A released app version must keep working against
+  the API for at least 12 months. Additive changes only within a version: new optional fields
+  are fine; removing or retyping a field is not.
+- The API advertises a minimum supported client version; older clients receive a structured
+  upgrade-required response rather than a parse failure.
+
+### NFR-14 Usability & operational efficiency
+- Counter staff create a walk-in booking in under 2 minutes for a returning customer.
+- The handover flow completes on a phone in under 5 minutes including photo capture.
+- Staff screens are usable one-handed on a phone at the counter and kerbside — this is not a
+  desk-only admin panel.
+- Destructive actions require confirmation naming the specific record.
+- Every list view has a search that matches on booking reference, customer name, phone and
+  vehicle registration, because that is how staff actually look things up.
+
+### NFR-15 Browser & device support
+- Latest two versions of Chrome, Safari, Edge and Firefox; Safari on iOS 16+ and Chrome on
+  Android 10+.
+- Public site and customer portal are mobile-first — the majority of Dubai rental traffic is
+  mobile.
+- Staff handover screens are tested on mid-range Android devices, not only flagship phones.
+- No support for Internet Explorer or any browser without ES2020.
+
+### NFR-16 Portability
+- No dependency on Proxmox, LXC or MinIO-specific behaviour in application code. Storage is
+  addressed through the S3 API, the database through standard Postgres.
+- All environment coupling lives in environment variables (spec §9).
+- The stack can be relocated to managed equivalents — Vercel, Neon or Supabase, Upstash, S3 or
+  R2 — without code changes. This keeps self-hosting a reversible decision.
+
+### NFR-17 Documentation & operability
+- The operations runbook stays current with the deployed system; changing infrastructure
+  without updating it is an incomplete change.
+- A committed `.env.example` lists every required variable with a description and no values.
+- Database schema changes ship with a migration and a note on the expand/contract sequence
+  where relevant.
+- A seed script produces a working local system: both branches, seven vehicle classes, sample
+  vehicles, rate cards and a test account per role.
+
 ---
 
 ## 8. Build phases
@@ -568,6 +789,18 @@ Screen 15 spans P1 and P3 — the About, FAQ and Contact pages ship in P1; the b
 | **P1** | Web MVP. Self-drive daily and weekly, end to end: search → book → pay → verify → hand over → return → settle → release deposit. Fleet, customers, rate cards, branches, users, settings, executive dashboard. | 43 |
 | **P2** | Chauffeur hourly and transfers with dispatch. Monthly lease. Salik, fines and damage charges. Seasonal pricing, promos, maintenance, support tickets, audit log. | 34 |
 | **P3** | Analytics depth in the owner portal. Blog and SEO content. Expense tracking. Plus the Expo app for customer and chauffeur, which is the bulk of the phase. | 6 + app |
+
+### Requirements by phase
+
+| Phase | Functional requirements |
+|---|---|
+| **P1** | FR-1 search · FR-2 pricing (daily/weekly only) · FR-3 booking lifecycle · FR-4 payments & deposits · FR-5 KYC · FR-6 handover · FR-7 fleet · FR-11 roles · FR-13 authentication · FR-14 customer records · FR-15 invoicing · FR-17 catalogue admin (rate cards, addons) · FR-18 branches & configuration · FR-19 executive dashboard only · FR-22 legal pages only |
+| **P2** | FR-2 chauffeur and transfer pricing · FR-8 charges · FR-9 dispatch · FR-16 lease & recurring billing · FR-17 seasonal rules, promos, packages · FR-19 revenue, ROI, utilisation reports · FR-20 support & disputes · FR-21 staff & chauffeur admin |
+| **P3** | FR-12 mobile app parity · FR-19 funnel, customer and performance analytics · FR-21 expense submission · FR-22 blog |
+
+Non-functional requirements are **not** phased. NFR-3 security, NFR-4 compliance and NFR-11
+evidentiary integrity apply from the first line of code — they are architectural properties,
+not features, and retrofitting any of them means rewriting what depends on them.
 
 Each phase gets its own spec, plan and implementation cycle. This document covers the whole
 platform; **P1 is the subject of the first implementation plan**.
