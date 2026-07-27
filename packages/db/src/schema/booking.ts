@@ -6,6 +6,7 @@ import { customers } from './customer'
 import { vehicles, branches } from './fleet'
 import { rateCards, addons, promoCodes } from './pricing'
 import { users } from './identity'
+import { termsVersions } from './content'
 
 // Spec §4 state machine. Chauffeur states are included now so the enum never
 // needs altering in P2 — adding a value to a pg enum in a live migration is
@@ -38,8 +39,10 @@ export const bookings = pgTable('bookings', {
   vatFils: integer('vat_fils').notNull(),
   totalFils: integer('total_fils').notNull(),
   depositFils: integer('deposit_fils').notNull(),
-  // FR-22.2 — reproduce the contract exactly as accepted
-  termsVersion: text('terms_version'),
+  // FR-22.2 — pins the agreement in force at booking time so the contract can be
+  // reproduced exactly as accepted. A foreign key, not a bare string: an unmatched
+  // version silently defeats the guarantee, and only in a dispute.
+  termsVersion: text('terms_version').references(() => termsVersions.version),
   cancellationPolicy: text('cancellation_policy'),
   createdByUserId: uuid('created_by_user_id').references(() => users.id),
   expiresAt: timestamp('expires_at', { withTimezone: true }),

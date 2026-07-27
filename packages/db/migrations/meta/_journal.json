@@ -85,6 +85,13 @@
       "when": 1785161036279,
       "tag": "0011_giant_carnage",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785161355006,
+      "tag": "0012_redundant_medusa",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import {
 import { sql } from 'drizzle-orm'
 import { bookings } from './booking'
 import { users } from './identity'
+import { termsVersions } from './content'
 
 export const handoverKind = pgEnum('handover_kind', ['pickup', 'return'])
 export const damageSeverity = pgEnum('damage_severity', ['scratch', 'dent', 'crack', 'missing'])
@@ -21,7 +22,9 @@ export const handovers = pgTable('handovers', {
   // NFR-11 — signature evidence
   signatureObjectKey: text('signature_object_key'),
   signatureIpAddress: text('signature_ip_address'),
-  termsVersion: text('terms_version'),
+  // FR-22.2 — same guarantee as bookings.termsVersion: a foreign key, not a bare
+  // string, so an unmatched version cannot silently defeat contract reproduction.
+  termsVersion: text('terms_version').references(() => termsVersions.version),
   contractObjectKey: text('contract_object_key'),
   // NFR-11 — self-referencing FK, deferrable, and the append-only enforcement trigger
   // both live in migrations/0008_handover_append_only.sql, NOT here. Drizzle cannot

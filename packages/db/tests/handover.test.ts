@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { sql, eq } from 'drizzle-orm'
 import {
   users, customers, branches, vehicleClasses, vehicles, rateCards,
-  bookings, handovers, inspectionPhotos, damageMarkers,
+  bookings, handovers, inspectionPhotos, damageMarkers, termsVersions,
 } from '../src/schema/index.js'
 import { withTestDb } from './db.js'
 
@@ -39,12 +39,18 @@ describe('handover schema', () => {
   beforeEach(async () => {
     await db.execute(sql`
       TRUNCATE TABLE inspection_photos, damage_markers, handovers, bookings,
-                     rate_cards, vehicles, vehicle_classes, branches, customers, users
+                     rate_cards, vehicles, vehicle_classes, branches, customers, users,
+                     terms_versions
       RESTART IDENTITY CASCADE`)
   })
 
   it('records a pickup handover with fuel, odometer and a signature', async () => {
     const { booking, staff } = await aBooking()
+    // termsVersion is a foreign key onto terms_versions.version (FR-22.2) — the row
+    // must exist before a handover can pin it.
+    await db.insert(termsVersions).values({
+      version: 'v1.0', body: 'Rental agreement text v1.0', effectiveFrom: '2026-01-01',
+    })
     const [h] = await db.insert(handovers).values({
       bookingId: booking.id, kind: 'pickup', odometerKm: 20000, fuelLevelEighths: 8,
       conductedByUserId: staff.id, signatureObjectKey: 'aa-contracts/sig-1.png',
