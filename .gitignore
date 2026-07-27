@@ -21,6 +21,11 @@ dist/
 *token*
 .netrc
 
+# ...but never let those broad patterns swallow generated migrations. drizzle-kit
+# names files with random adjective_noun pairs, and "0005_secret_spot.sql" really
+# happened. A silently untracked migration means a fresh clone builds the wrong schema.
+!packages/db/migrations/**
+
 .DS_Store
 *.log
 npm-debug.log*
