@@ -32,6 +32,20 @@ export function dubaiWeekday(at: Date): number {
   return index
 }
 
+/**
+ * The Asia/Dubai calendar date of a UTC instant, as `YYYY-MM-DD`.
+ *
+ * Business dates — a maintenance block, a document expiry, a trading day — are Dubai
+ * dates. Slicing `toISOString()` gives the UTC date instead, which is one day behind
+ * for any instant from 20:00Z onward, so a car in the workshop on its actual return
+ * day would read as available.
+ */
+export function dubaiDate(at: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: DUBAI, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(at)
+}
+
 export function dubaiTimeOfDay(at: Date): string {
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: DUBAI, hour: '2-digit', minute: '2-digit', hour12: false,

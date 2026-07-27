@@ -1,5 +1,5 @@
 import { findConflictingBookings } from './overlap.js'
-import { isWithinOpeningHours } from './opening-hours.js'
+import { isWithinOpeningHours, dubaiDate } from './opening-hours.js'
 import type {
   AvailabilityInput, AvailabilityResult, UnavailableReason,
 } from './types.js'
@@ -8,11 +8,6 @@ export type {
   AvailabilityInput, AvailabilityResult, UnavailableReason,
   VehicleForAvailability, MaintenanceBlock, VehicleDocumentExpiry, VehicleStatus,
 } from './types.js'
-
-/** `YYYY-MM-DD` of a UTC instant. Used to compare against date-typed columns. */
-function isoDate(at: Date): string {
-  return at.toISOString().slice(0, 10)
-}
 
 /**
  * Whether a vehicle can be booked for a range, and if not, every reason why.
@@ -45,8 +40,11 @@ export function checkAvailability(input: AvailabilityInput): AvailabilityResult 
     reasons.push({ kind: 'booked', conflictingBookingIds: conflicts.map((b) => b.id) })
   }
 
-  const startDate = isoDate(input.startsAt)
-  const endDate = isoDate(input.endsAt)
+  // Business dates — maintenance blocks and document expiries — are Dubai calendar
+  // dates, not UTC ones. From 20:00Z onward the UTC date is a day behind Dubai's, so
+  // using UTC here would miss the real return day and let an unavailable car through.
+  const startDate = dubaiDate(input.startsAt)
+  const endDate = dubaiDate(input.endsAt)
 
   const blocking = input.maintenanceBlocks.filter(
     (m) => m.startsOn <= endDate && (m.endsOn === null || m.endsOn >= startDate),

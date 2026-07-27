@@ -139,11 +139,45 @@ describe('availability engine', () => {
       documentExpiries: [{ type: 'insurance', expiresOn: '2026-08-02' }],
     }))
     expect(r.available).toBe(false)
-    expect(r.reasons.length).toBeGreaterThanOrEqual(3)
+    const kinds = r.reasons.map((x) => x.kind)
+    expect(kinds).toContain('vehicle_status')
+    expect(kinds).toContain('maintenance')
+    expect(kinds).toContain('document_expired')
   })
 
   it('rejects a range that ends before it starts', () => {
     expect(() => checkAvailability(base({ endsAt: new Date('2026-07-01T06:00:00Z') })))
       .toThrow(/before/i)
+  })
+
+  it('uses the Dubai business date, not the UTC date, for maintenance (NFR-5)', () => {
+    // 2026-08-03T22:00Z is 02:00 on 4 August in Dubai. The true return day is the 4th.
+    const r = checkAvailability(base({
+      startsAt: new Date('2026-08-01T06:00:00Z'),
+      endsAt: new Date('2026-08-03T22:00:00Z'),
+      maintenanceBlocks: [{ id: 'm1', startsOn: '2026-08-04', endsOn: '2026-08-04' }],
+    }))
+    expect(r.reasons.map((x) => x.kind)).toContain('maintenance')
+  })
+
+  it('uses the Dubai business date, not the UTC date, for document expiry (NFR-5)', () => {
+    const r = checkAvailability(base({
+      startsAt: new Date('2026-08-01T06:00:00Z'),
+      endsAt: new Date('2026-08-03T22:00:00Z'),
+      documentExpiries: [{ type: 'insurance', expiresOn: '2026-08-04' }],
+    }))
+    expect(r.reasons.map((x) => x.kind)).toContain('document_expired')
+  })
+
+  it('uses the Dubai business date for a late-evening pickup too', () => {
+    // 2026-08-01T21:00Z is 01:00 on 2 August in Dubai — the rental starts on the 2nd.
+    const r = checkAvailability(base({
+      startsAt: new Date('2026-08-01T21:00:00Z'),
+      endsAt: new Date('2026-08-05T06:00:00Z'),
+      maintenanceBlocks: [{ id: 'm1', startsOn: '2026-07-20', endsOn: '2026-08-01' }],
+    }))
+    // The block ended on 1 August; the rental begins on the 2nd in Dubai terms, so it
+    // must NOT block. With the UTC bug this would read as starting on the 1st and block.
+    expect(r.reasons.map((x) => x.kind)).not.toContain('maintenance')
   })
 })
