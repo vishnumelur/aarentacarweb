@@ -36,6 +36,13 @@
       "when": 1785158034940,
       "tag": "0004_flaky_ben_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785158406040,
+      "tag": "0005_add_bookings",
+      "breakpoints": true
     }
   ]
 }
