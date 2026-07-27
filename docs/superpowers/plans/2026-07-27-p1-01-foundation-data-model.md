@@ -1053,10 +1053,12 @@ export const vehicles = pgTable('vehicles', {
   check('year_sane', sql`${t.year} BETWEEN 1990 AND 2100`),
 ])
 
-// FR-7.2 — expiry drives automatic blocking
+// FR-7.2 — expiry drives automatic blocking.
+// `restrict`, not `cascade`: mulkiya and insurance records are compliance artifacts. A
+// vehicle is retired via status, never deleted; an accidental DELETE must fail loudly.
 export const vehicleDocuments = pgTable('vehicle_documents', {
   id: uuid('id').primaryKey().defaultRandom(),
-  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'restrict' }),
   type: vehicleDocumentType('type').notNull(),
   documentNumber: text('document_number'),
   expiresOn: date('expires_on').notNull(),
@@ -1075,10 +1077,12 @@ export const vehiclePhotos = pgTable('vehicle_photos', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('vehicle_photos_vehicle_idx').on(t.vehicleId)])
 
-// FR-7.3, FR-7.4 — an open job makes the vehicle unavailable
+// FR-7.3, FR-7.4 — an open job makes the vehicle unavailable.
+// `restrict`: maintenance and cost history feeds fleet ROI reporting (FR-19.3) and must
+// survive any attempt to delete the vehicle.
 export const maintenanceJobs = pgTable('maintenance_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'restrict' }),
   status: maintenanceStatus('status').notNull().default('open'),
   reason: text('reason').notNull(),
   startsOn: date('starts_on').notNull(),
