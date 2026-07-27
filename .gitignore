@@ -31,3 +31,6 @@ coverage/
 .expo/
 *.tsbuildinfo
 .vercel
+
+# Embedded Postgres scratch data directory (packages/db test harness fallback)
+.embedded-pg/
