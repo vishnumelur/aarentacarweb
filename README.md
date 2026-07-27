@@ -7,10 +7,14 @@ portals, sharing one database with a React Native / Expo mobile app.
 
 ## Start here
 
-[`docs/superpowers/specs/2026-07-27-aa-rentacar-design.md`](docs/superpowers/specs/2026-07-27-aa-rentacar-design.md)
+**Design spec —** [`docs/superpowers/specs/2026-07-27-aa-rentacar-design.md`](docs/superpowers/specs/2026-07-27-aa-rentacar-design.md)
+Source of truth for *what* to build: architecture, server sizing, domain model, all 83 screens,
+functional requirements, non-functional requirements and build phases.
 
-That document is the source of truth: architecture, server sizing, domain model, all 83
-screens, functional requirements, non-functional requirements and build phases.
+**Operations runbook —** [`docs/operations/runbook.md`](docs/operations/runbook.md)
+Source of truth for *how to run it*: LXC provisioning, Postgres and MinIO setup, Caddy vhosts,
+the GitHub Actions deploy pipeline, PBS backup hooks, restore drill, security checklist and
+troubleshooting.
 
 ## Planned structure
 

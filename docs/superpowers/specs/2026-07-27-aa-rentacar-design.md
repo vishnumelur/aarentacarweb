@@ -134,6 +134,11 @@ the shared packages make that a lift rather than a rewrite.
 
 ## 3. Infrastructure
 
+> **Executable procedures live in [`docs/operations/runbook.md`](../../operations/runbook.md)** —
+> container provisioning, Postgres and MinIO setup, Caddy vhosts, the deploy pipeline, PBS
+> backup hooks, the restore drill and a troubleshooting table. This section states the
+> requirement; the runbook states the commands.
+
 Deployed to the existing Hetzner-PVE Proxmox cluster, backed up by PBS-Local, fronted by the
 existing Caddy container.
 
