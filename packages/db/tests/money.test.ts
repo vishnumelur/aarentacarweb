@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { sql } from 'drizzle-orm'
+import { sql, eq } from 'drizzle-orm'
 import {
   users, customers, branches, vehicleClasses, vehicles, rateCards,
   bookings, payments, depositHolds, charges, invoices,
@@ -41,6 +41,11 @@ describe('money schema', () => {
       TRUNCATE TABLE invoices, charges, deposit_holds, payments, bookings,
                      rate_cards, vehicles, vehicle_classes, branches, customers, users
       RESTART IDENTITY CASCADE`)
+    // invoice numbering now lives in invoice_sequence, not a Postgres identity
+    // sequence, so RESTART IDENTITY above no longer resets it. Reset the counter
+    // directly, but never truncate invoice_sequence itself — its single seed row
+    // (id = 1) must survive, per the invoice_sequence_single_row CHECK.
+    await db.execute(sql`UPDATE invoice_sequence SET next_number = 1`)
   })
 
   it('records a card payment with a gateway reference', async () => {
@@ -110,5 +115,75 @@ describe('money schema', () => {
       .where(sql`id = ${inv!.id}`).returning()
     expect(voided!.number).toBe(inv!.number)
     expect(voided!.status).toBe('void')
+  })
+
+  it('leaves no gap when an invoice insert is rolled back (FR-15.2)', async () => {
+    const { booking, customer } = await aBooking()
+    const [first] = await db.insert(invoices).values({
+      bookingId: booking.id, customerId: customer.id,
+      subtotalFils: 36000, vatFils: 1800, totalFils: 37800,
+    }).returning()
+
+    // A failed invoice creation must not consume a number.
+    await expect(db.transaction(async (tx) => {
+      await tx.insert(invoices).values({
+        bookingId: booking.id, customerId: customer.id,
+        subtotalFils: 1000, vatFils: 50, totalFils: 1050,
+      })
+      throw new Error('simulated failure after allocating a number')
+    })).rejects.toThrow()
+
+    const [next] = await db.insert(invoices).values({
+      bookingId: booking.id, customerId: customer.id,
+      subtotalFils: 2000, vatFils: 100, totalFils: 2100,
+    }).returning()
+
+    // With a sequence this would be first.number + 2. It must be + 1.
+    expect(next!.number).toBe(first!.number + 1)
+  })
+
+  it('refuses to delete an invoice — void it instead (FR-15.2)', async () => {
+    const { booking, customer } = await aBooking()
+    const [inv] = await db.insert(invoices).values({
+      bookingId: booking.id, customerId: customer.id,
+      subtotalFils: 36000, vatFils: 1800, totalFils: 37800,
+    }).returning()
+    await expect(db.delete(invoices).where(eq(invoices.id, inv!.id))).rejects.toThrow()
+  })
+
+  it('requires a reason when voiding an invoice (FR-15.2)', async () => {
+    const { booking, customer } = await aBooking()
+    const [inv] = await db.insert(invoices).values({
+      bookingId: booking.id, customerId: customer.id,
+      subtotalFils: 36000, vatFils: 1800, totalFils: 37800,
+    }).returning()
+    await expect(
+      db.update(invoices).set({ status: 'void' }).where(eq(invoices.id, inv!.id)),
+    ).rejects.toThrow()
+  })
+
+  it('refuses a credit note pointing at an invoice that does not exist', async () => {
+    const { booking, customer } = await aBooking()
+    await expect(db.insert(invoices).values({
+      bookingId: booking.id, customerId: customer.id,
+      subtotalFils: 1000, vatFils: 50, totalFils: 1050,
+      creditsInvoiceId: crypto.randomUUID(),
+    })).rejects.toThrow()
+  })
+
+  it('rejects a payment amount of zero or less', async () => {
+    const { booking } = await aBooking()
+    await expect(db.insert(payments).values({
+      bookingId: booking.id, method: 'card', amountFils: 0,
+      gatewayReference: 'telr-zero-1',
+    })).rejects.toThrow()
+  })
+
+  it('rejects a refund larger than the payment', async () => {
+    const { booking } = await aBooking()
+    await expect(db.insert(payments).values({
+      bookingId: booking.id, method: 'card', amountFils: 10000,
+      refundedFils: 20000, gatewayReference: 'telr-overrefund-1',
+    })).rejects.toThrow()
   })
 })

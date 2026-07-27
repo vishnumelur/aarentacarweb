@@ -22,6 +22,11 @@ export const payments = pgTable('payments', {
   method: paymentMethod('method').notNull(),
   status: paymentStatus('status').notNull().default('pending'),
   amountFils: integer('amount_fils').notNull(),
+  // KNOWN GAP (not fixed in this task): two concurrent read-modify-write refunds can
+  // each independently satisfy `refund_within_amount` below while jointly over-refunding
+  // the payment — a lost-update race. Closing this properly needs an append-only refund
+  // ledger with a trigger-maintained running total; that is a P1.5 design decision, not
+  // a schema patch, and is deliberately deferred.
   refundedFils: integer('refunded_fils').notNull().default(0),
   // FR-4.5 — unique, so a replayed webhook cannot double-charge
   gatewayReference: text('gateway_reference').unique(),
@@ -60,6 +65,8 @@ export const charges = pgTable('charges', {
   occurredAt: timestamp('occurred_at', { withTimezone: true }),
   // FR-20.2 — a disputed charge is excluded from automatic deposit capture
   isDisputed: boolean('is_disputed').notNull().default(false),
+  // Deliberately independent of isDisputed: a settled charge can later be disputed
+  // and charged back, so both flags may legitimately be true at once.
   isSettled: boolean('is_settled').notNull().default(false),
   createdByUserId: uuid('created_by_user_id').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -68,17 +75,21 @@ export const charges = pgTable('charges', {
   check('charge_amount_non_negative', sql`${t.amountFils} >= 0 AND ${t.adminFeeFils} >= 0`),
 ])
 
-// FR-15.2 — `number` is a generated identity column, so numbering is gapless and
-// monotonic. A void keeps its number; rows are never deleted.
+// FR-15.2 — `number` is allocated by next_invoice_number() in migration 0010, NOT an
+// identity column: sequences are non-transactional and a rolled-back insert would leave
+// a permanent gap, which UAE tax law forbids. A void keeps its number; rows are never
+// deleted (enforced by a trigger in 0010).
 export const invoices = pgTable('invoices', {
   id: uuid('id').primaryKey().defaultRandom(),
-  number: integer('number').notNull().unique().generatedAlwaysAsIdentity({ startWith: 1 }),
+  number: integer('number').notNull().unique(),
   bookingId: uuid('booking_id').notNull().references(() => bookings.id, { onDelete: 'restrict' }),
   customerId: uuid('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
   status: invoiceStatus('status').notNull().default('issued'),
   subtotalFils: integer('subtotal_fils').notNull(),
   vatFils: integer('vat_fils').notNull(),
   totalFils: integer('total_fils').notNull(),
+  // Self-referencing FK to the credited invoice lives in migration 0010 — Drizzle can't
+  // express a same-table reference inline here without a circular type.
   creditsInvoiceId: uuid('credits_invoice_id'),
   voidReason: text('void_reason'),
   pdfObjectKey: text('pdf_object_key'),
