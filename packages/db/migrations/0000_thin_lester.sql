@@ -35,7 +35,7 @@ CREATE TABLE "users" (
 	"branch_id" uuid,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"locked_until" timestamp with time zone,
-	"failed_login_count" text DEFAULT '0' NOT NULL,
+	"failed_login_count" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "users_phone_unique" UNIQUE("phone"),

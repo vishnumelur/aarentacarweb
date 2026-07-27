@@ -6,9 +6,12 @@ const pools = new Set<pg.Pool>()
 
 export function createDb(connectionString: string): NodePgDatabase<typeof schema> {
   const pool = new pg.Pool({ connectionString, max: 10 })
-  // Idle clients emit 'error' when the server goes away — expected during teardown.
-  // Without a listener, Node treats it as an unhandled error and exits non-zero.
-  pool.on('error', () => {})
+  // An idle client emits 'error' when the server goes away. Without a listener Node
+  // treats it as unhandled and exits non-zero, so one is required — but it must stay
+  // visible: swallowing pool errors silently would hide real production failures.
+  pool.on('error', (err) => {
+    console.error('[db] pool error:', err instanceof Error ? err.message : String(err))
+  })
   pools.add(pool)
   return drizzle(pool, { schema })
 }

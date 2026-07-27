@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, uuid, text, boolean, integer, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 
 export const userRole = pgEnum('user_role', ['customer', 'chauffeur', 'staff', 'owner'])
 
@@ -13,7 +13,7 @@ export const users = pgTable('users', {
   branchId: uuid('branch_id'),
   isActive: boolean('is_active').notNull().default(true),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
-  failedLoginCount: text('failed_login_count').notNull().default('0'),
+  failedLoginCount: integer('failed_login_count').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('users_role_idx').on(t.role)])

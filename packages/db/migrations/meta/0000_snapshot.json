@@ -1,5 +1,5 @@
 {
-  "id": "7058d927-9e23-4372-a10a-2e551d1cf516",
+  "id": "740787fc-77a0-4d1d-876c-30855bfb2852",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -274,10 +274,10 @@
         },
         "failed_login_count": {
           "name": "failed_login_count",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "'0'"
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
