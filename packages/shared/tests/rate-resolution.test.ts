@@ -55,6 +55,13 @@ describe('rate card resolution (FR-17.7)', () => {
     expect(resolveRateCard([economy, sports], 'sports', '2026-06-01')?.id).toBe('sports')
     expect(resolveRateCard([economy, sports], 'luxury', '2026-06-01')).toBeNull()
   })
+
+  it('breaks a fully-tied rate card (same validFrom, same open-endedness) by id, order-independently', () => {
+    const first = card('aaa', '2026-01-01', null)
+    const second = card('bbb', '2026-01-01', null)
+    expect(resolveRateCard([first, second], 'class-1', '2026-06-01')?.id).toBe('bbb')
+    expect(resolveRateCard([second, first], 'class-1', '2026-06-01')?.id).toBe('bbb')
+  })
 })
 
 describe('seasonal rule resolution (FR-17.2)', () => {
@@ -113,6 +120,19 @@ describe('seasonal rule resolution (FR-17.2)', () => {
     expect(resolveSeasonalRate([eco, sports], 'economy', '2026-12-01')?.name).toBe('EcoPeak')
     expect(resolveSeasonalRate([eco, sports], 'sports', '2026-12-01')?.name).toBe('SportsPeak')
   })
+
+  it('breaks a fully-tied seasonal rule (same priority, identical window) by name, order-independently', () => {
+    const alpha: SeasonalRate = {
+      classId: 'class-1', name: 'Alpha', startsOn: '2026-06-01', endsOn: '2026-06-07',
+      multiplierBps: 12000, priority: 10,
+    }
+    const beta: SeasonalRate = {
+      classId: 'class-1', name: 'Beta', startsOn: '2026-06-01', endsOn: '2026-06-07',
+      multiplierBps: 15000, priority: 10,
+    }
+    expect(resolveSeasonalRate([alpha, beta], 'class-1', '2026-06-03')?.name).toBe('Beta')
+    expect(resolveSeasonalRate([beta, alpha], 'class-1', '2026-06-03')?.name).toBe('Beta')
+  })
 })
 
 describe('weekly tier resolution (FR-2.2)', () => {
@@ -154,5 +174,15 @@ describe('weekly tier resolution (FR-2.2)', () => {
     ]
     expect(resolveWeeklyTier(tied, 10)?.discountBps).toBe(1500)
     expect(resolveWeeklyTier([tied[1]!, tied[0]!], 10)?.discountBps).toBe(1500)
+  })
+
+  it('keeps the higher tier when a lower one appears later in the array', () => {
+    // Every other test encounters minDays in ascending order, so the "later element
+    // is not the new best" branch is never taken. Reverse the order here to force it.
+    const descending: WeeklyTier[] = [
+      { rateCardId: 'a', minDays: 14, discountBps: 1500 },
+      { rateCardId: 'a', minDays: 7, discountBps: 1000 },
+    ]
+    expect(resolveWeeklyTier(descending, 20)?.discountBps).toBe(1500)
   })
 })

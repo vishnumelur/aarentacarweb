@@ -52,6 +52,15 @@ describe('money arithmetic', () => {
     expect(() => applyBps(-1, 500)).toThrow(/negative/)
   })
 
+  it('validates the bps argument itself, not just the amount it is applied to', () => {
+    // A valid amount with a malformed bps must still be caught — assertBps guards
+    // independently of assertAmount, not only as a side effect of it.
+    expect(() => addVat(1000, 500.5)).toThrow(/integer number of basis points/)
+    expect(() => addVat(1000, -1)).toThrow(/must not be negative/)
+    expect(() => applyMultiplierBps(1000, 500.5)).toThrow(/integer number of basis points/)
+    expect(() => applyMultiplierBps(1000, -1)).toThrow(/must not be negative/)
+  })
+
   it('rejects a proportion greater than 100%', () => {
     expect(() => applyBps(84000, 10001)).toThrow(/10000 basis points/)
     // Exactly 100% is legal.

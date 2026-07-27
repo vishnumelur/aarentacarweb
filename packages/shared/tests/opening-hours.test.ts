@@ -92,4 +92,12 @@ describe('opening hours', () => {
     const withSeconds: OpeningInterval[] = [{ weekday: 6, opensAt: '08:00:00', closesAt: '21:30:00' }]
     expect(isWithinOpeningHours(withSeconds, new Date('2026-08-01T06:00:00Z'))).toBe(true)
   })
+
+  it('rejects a malformed stored time rather than silently misreading it', () => {
+    // toMinutes is not exported; the only path to it is through the stored interval
+    // data, so a corrupt opensAt/closesAt must still surface loudly.
+    const malformed: OpeningInterval[] = [{ weekday: 6, opensAt: 'not-a-time', closesAt: '21:30' }]
+    expect(() => isWithinOpeningHours(malformed, new Date('2026-08-01T06:00:00Z')))
+      .toThrow(/Invalid time/)
+  })
 })

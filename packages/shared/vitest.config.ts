@@ -12,7 +12,15 @@ export default defineConfig({
       reporter: ['text', 'json-summary'],
       // NFR-9: the pricing engine, availability engine and state machine are
       // covered at 90%+. These are the functions every screen depends on.
-      thresholds: { lines: 90, functions: 90, branches: 90, statements: 90 },
+      thresholds: {
+        // NFR-9 requires each engine at 90%+, not the average. Without perFile a
+        // well-covered module can mask another decaying to 50% while CI stays green.
+        perFile: true,
+        lines: 90,
+        functions: 90,
+        branches: 90,
+        statements: 90,
+      },
     },
   },
 })

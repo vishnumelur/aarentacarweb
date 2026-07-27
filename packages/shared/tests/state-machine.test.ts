@@ -88,6 +88,13 @@ describe('booking state machine', () => {
       .toThrow(/DRAFT.*COMPLETED/)
   })
 
+  it('names no allowed states when asserting from a terminal state', () => {
+    // The suffix branches on whether any transition is allowed; a terminal state
+    // has none, so the message must say so rather than joining an empty list.
+    expect(() => assertTransition('COMPLETED', 'DRAFT'))
+      .toThrow(/none — it is terminal/)
+  })
+
   it('confirms a pay-at-pickup or walk-in booking without an online payment', () => {
     // FR-3.6 counter bookings and FR-4.2 pay-at-pickup skip PENDING_PAYMENT.
     expect(canTransition('DRAFT', 'CONFIRMED')).toBe(true)
