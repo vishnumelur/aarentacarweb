@@ -29,7 +29,13 @@ function reachable(port: number, host = 'localhost'): Promise<boolean> {
  */
 export async function setup(): Promise<() => Promise<void>> {
   const url = process.env.DATABASE_URL_TEST
-  if (!url) throw new Error('DATABASE_URL_TEST is not set')
+  if (!url) {
+    // A throw inside globalSetup does not fail the vitest run — it prints an unhandled
+    // error and exits 0, which let CI report success having run zero tests. Exit
+    // explicitly so the failure is impossible to miss.
+    console.error('FATAL: DATABASE_URL_TEST is not set — refusing to run with no database.')
+    process.exit(1)
+  }
 
   const parsed = new URL(url)
   const port = Number(parsed.port || '5432')

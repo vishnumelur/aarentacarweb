@@ -54,3 +54,13 @@ jobs:
       - run: pnpm typecheck
 
       - run: pnpm test
+
+      - name: Assert the database test suite actually ran
+        run: |
+          pnpm --filter @aa/db exec vitest run --reporter=json --outputFile=/tmp/db-tests.json
+          COUNT=$(node -e "console.log(require('/tmp/db-tests.json').numTotalTests)")
+          echo "database tests executed: $COUNT"
+          if [ "$COUNT" -lt 80 ]; then
+            echo "::error::Expected at least 80 database tests, got $COUNT. CI is not testing the schema."
+            exit 1
+          fi
