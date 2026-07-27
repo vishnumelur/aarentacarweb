@@ -27,6 +27,8 @@ export type PromoCode = z.infer<typeof PromoCodeSchema>
 export type PromoRejectedReason =
   | 'below_minimum_value'
   | 'product_not_applicable'
+  /** A percent promo whose value exceeds 100. Storable in the database, meaningless as a discount. */
+  | 'invalid_discount_value'
 
 export interface QuoteLine {
   readonly label: string

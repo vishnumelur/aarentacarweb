@@ -161,6 +161,8 @@ describe('pricing quote', () => {
     const r = quote(base({
       addons: [{ id: 'a1', slug: 'gps', priceFils: 2000, priceModel: 'per_day', quantity: 1 }],
       deliveryFeeFils: 5000,
+      promoCode: { code: 'WELCOME10', discountType: 'percent', discountValue: 10,
+        applicableProducts: null, minBookingValueFils: 0 },
     }))
     const labels = r.lines.map((l) => l.label)
     expect(labels).toContain('Rental (2 days)')
@@ -169,5 +171,50 @@ describe('pricing quote', () => {
     expect(labels).toContain('VAT')
     // Every line carries an integer amount.
     for (const l of r.lines) expect(Number.isInteger(l.amountFils)).toBe(true)
+
+    const rentalLine = r.lines.find((l) => l.label === 'Rental (2 days)')
+    expect(rentalLine?.amountFils).toBe(24000)
+
+    const promoLine = r.lines.find((l) => l.label.startsWith('Promo'))
+    expect(promoLine?.amountFils).toBeLessThan(0)
+    expect(promoLine?.amountFils).toBe(-r.discountFils)
+  })
+
+  it('sums a weekly tier and a promo rather than compounding them', () => {
+    const r = quote(base({
+      endDate: '2026-08-08',
+      weeklyTiers: [{ rateCardId: 'card-1', minDays: 7, discountBps: 1500 }],
+      promoCode: { code: 'EXTRA20', discountType: 'percent', discountValue: 20,
+        applicableProducts: null, minBookingValueFils: 0 },
+    }))
+    expect(r.days).toBe(7)
+    expect(r.subtotalFils).toBe(84000)
+    // Summed: 15% + 20% = 35% of 84000 = 29400.
+    // Compounded would be 84000 * 0.85 * 0.80 = 57120, i.e. a 26880 discount.
+    expect(r.discountFils).toBe(29400)
+    expect(r.totalFils).toBe(r.subtotalFils - r.discountFils + r.vatFils)
+  })
+
+  it('rejects a percent promo above 100 instead of throwing', () => {
+    const r = quote(base({
+      promoCode: { code: 'BROKEN', discountType: 'percent', discountValue: 150,
+        applicableProducts: null, minBookingValueFils: 0 },
+    }))
+    expect(r.discountFils).toBe(0)
+    expect(r.promoRejectedReason).toBe('invalid_discount_value')
+    expect(r.totalFils).toBe(r.subtotalFils - r.discountFils + r.vatFils)
+  })
+
+  it('caps a combined discount at the subtotal', () => {
+    const r = quote(base({
+      endDate: '2026-08-08',
+      weeklyTiers: [{ rateCardId: 'card-1', minDays: 7, discountBps: 9000 }],
+      promoCode: { code: 'HALF', discountType: 'percent', discountValue: 50,
+        applicableProducts: null, minBookingValueFils: 0 },
+    }))
+    // 90% + 50% = 140%, which must clamp to exactly the subtotal, never beyond.
+    expect(r.discountFils).toBe(r.subtotalFils)
+    expect(r.totalFils).toBe(0)
+    expect(r.vatFils).toBe(0)
   })
 })

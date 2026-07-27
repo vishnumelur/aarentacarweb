@@ -106,6 +106,10 @@ function rentalDays(startDate: string, endDate: string): number {
   if (end < start) {
     throw new Error(`End date ${endDate} precedes start date ${startDate}`)
   }
+  // Math.round guards against floating-point noise in the division; it is never
+  // rounding a monetary value (UTC midnight-to-midnight differences are always
+  // exact multiples of MS_PER_DAY, and Dubai has no DST), so this is date
+  // arithmetic, not a rounding decision — it does not belong in money.ts.
   return Math.max(1, Math.round((end - start) / MS_PER_DAY))
 }
 
@@ -164,6 +168,11 @@ export function quote(input: QuoteInput): QuoteResult {
       promoRejectedReason = 'product_not_applicable'
     } else if (subtotalFils < promo.minBookingValueFils) {
       promoRejectedReason = 'below_minimum_value'
+    } else if (promo.discountType === 'percent' && promo.discountValue > 100) {
+      // The database permits any positive discount_value, so a 150% promo is storable.
+      // Reject it the way every other bad promo is rejected rather than throwing —
+      // one malformed row must not break pricing for every customer.
+      promoRejectedReason = 'invalid_discount_value'
     } else {
       promoDiscountFils = promo.discountType === 'percent'
         ? applyBps(subtotalFils, promo.discountValue * 100)
