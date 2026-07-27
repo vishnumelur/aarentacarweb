@@ -569,7 +569,74 @@ platform; **P1 is the subject of the first implementation plan**.
 
 ---
 
-## 9. Open questions
+## 9. Development and deployment workflow
+
+### Principle
+
+Local development mirrors the production stack rather than connecting to it. Postgres, Redis
+and MinIO all run locally in Docker Compose at the same major versions as the server. Because
+MinIO speaks the S3 API, storage code is identical in both environments and only the endpoint
+and credentials differ.
+
+**Local development must never point at the production database or the production bucket.**
+Those hold customer KYC documents, signed rental contracts and inspection photographs that are
+evidence in damage disputes. A stray migration or delete against them is not recoverable from
+anything faster than a PBS restore.
+
+### Local stack
+
+```yaml
+# docker-compose.dev.yml
+services:
+  postgres:  { image: postgres:17,    ports: ["5432:5432"] }
+  redis:     { image: redis:7-alpine, ports: ["6379:6379"] }
+  minio:     { image: minio/minio,    ports: ["9000:9000", "9001:9001"] }
+```
+
+Environment differs; code does not.
+
+```
+# .env.local                          # server .env
+S3_ENDPOINT=http://localhost:9000     S3_ENDPOINT=http://10.10.10.x:9000
+S3_PUBLIC_URL=http://localhost:9000   S3_PUBLIC_URL=https://cdn.aa-rentacar.com
+DATABASE_URL=...@localhost:5432       DATABASE_URL=...@10.10.10.x:5432
+NOTIFY_DRIVER=console                 NOTIFY_DRIVER=live
+```
+
+### Deployment flow
+
+```
+git push main
+  → GitHub Actions: typecheck, test, build Docker image
+  → push image to GHCR
+  → node pulls image
+  → run migrations
+  → health check new container
+  → Caddy cuts over
+  → old container drains and stops
+```
+
+Builds happen in CI, never on the node (see §3).
+
+### Environment-specific hazards
+
+1. **Migrations are the primary deploy risk.** Code deploys atomically; schema does not.
+   Migrations run before the new container takes traffic and must remain compatible with the
+   outgoing container during cutover. Never drop or rename a column in the same deploy that
+   stops using it — expand, deploy, contract, as three separate deploys.
+2. **Gateway webhooks cannot reach localhost.** Development uses a tunnel (`cloudflared` or
+   ngrok). All webhook handlers are idempotent and keyed on the provider's event ID; they will
+   be delivered more than once, and a double-captured deposit is a customer-facing failure.
+3. **File URLs are always generated from `S3_PUBLIC_URL`**, never hardcoded. A literal
+   `localhost:9000` anywhere breaks every stored photograph in production.
+4. **Notifications need a console driver locally.** SMS and WhatsApp cost money and reach real
+   phones; a background job under test must not message live customers.
+5. **Seed data, not production data.** A seed script creates both branches, the seven vehicle
+   classes, sample vehicles, rate cards and test accounts for each of the four roles.
+
+---
+
+## 10. Open questions
 
 Not blocking phase 1, but needed before the phases that depend on them:
 
