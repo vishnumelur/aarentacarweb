@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import EmbeddedPostgres from 'embedded-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
-import { createDb } from '../src/client.js'
+import { createDb, closeAllPools } from '../src/client.js'
 
 const MIGRATIONS_FOLDER = './migrations'
 
@@ -53,9 +53,15 @@ export async function setup(): Promise<() => Promise<void>> {
   // Tasks 4+ generate migrations; at Task 3 the folder is legitimately empty.
   if (existsSync(MIGRATIONS_FOLDER) && readdirSync(MIGRATIONS_FOLDER).some((f) => f.endsWith('.sql'))) {
     await migrate(createDb(url), { migrationsFolder: MIGRATIONS_FOLDER })
+    // Close the migration pool now rather than holding it open for the whole run —
+    // nothing else has called createDb() yet at this point in globalSetup.
+    await closeAllPools()
   }
 
   return async () => {
+    // Close every test file's pool before stopping the server: an idle client left
+    // open when Postgres shuts down would otherwise emit an unhandled 'error' event.
+    await closeAllPools()
     if (embedded) await embedded.stop()
   }
 }
