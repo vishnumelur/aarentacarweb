@@ -557,6 +557,12 @@ Record the wall-clock time. That number is your real RTO, not the 4 hours in the
 - [ ] Fail2ban on the Caddy container for auth endpoints
 - [ ] GHCR token on the node is **read-only**
 - [ ] Deploy SSH key is a dedicated `deploy` user, not root
+- [ ] **The application's database role cannot `TRUNCATE`.** `handovers` and `inspection_photos`
+      are protected against UPDATE and DELETE by row-level triggers (migration `0008`), but
+      `TRUNCATE` fires no row triggers and would erase dispute evidence silently. The app role
+      needs INSERT/SELECT/UPDATE/DELETE and nothing more — it must not own these tables:
+      `REVOKE TRUNCATE ON handovers, inspection_photos FROM aarental;`
+      Verify with `\dp handovers` that no TRUNCATE privilege is granted.
 
 Regarding PDPL: the KYC bucket holds passport and Emirates ID scans. Access must be via signed
 URLs with short expiry, every access logged, and a documented retention period.
