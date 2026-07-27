@@ -49,10 +49,22 @@ export const bookings = pgTable('bookings', {
   index('bookings_status_start_idx').on(t.status, t.startsAt),
   index('bookings_customer_idx').on(t.customerId),
   index('bookings_vehicle_range_idx').on(t.vehicleId, t.startsAt, t.endsAt),
+  // FR-3.3 — the sweeper scans PENDING_PAYMENT bookings past their expiry. The
+  // (status, startsAt) index does not serve that query.
+  index('bookings_expiry_idx').on(t.expiresAt).where(sql`${t.expiresAt} IS NOT NULL`),
   check('range_ordered', sql`${t.endsAt} > ${t.startsAt}`),
   check('totals_non_negative', sql`
     ${t.subtotalFils} >= 0 AND ${t.vatFils} >= 0
     AND ${t.totalFils} >= 0 AND ${t.depositFils} >= 0`),
+  // The money must add up. VAT applies to the discounted subtotal; the deposit is a
+  // separate hold and is deliberately not part of the total. Without this, a pricing
+  // bug persists self-inconsistent totals that no later reconciliation can detect.
+  check('totals_consistent', sql`
+    ${t.totalFils} = ${t.subtotalFils} - ${t.discountFils} + ${t.vatFils}`),
+  // A self-drive booking without a vehicle is meaningless. Chauffeur bookings may
+  // legitimately have none until dispatch assigns one.
+  check('self_drive_needs_vehicle', sql`
+    ${t.product} <> 'self_drive' OR ${t.vehicleId} IS NOT NULL`),
 ])
 
 export const selfDriveDetails = pgTable('self_drive_details', {

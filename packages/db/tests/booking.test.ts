@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { sql } from 'drizzle-orm'
+import { sql, eq } from 'drizzle-orm'
 import {
-  users, customers, branches, vehicleClasses, vehicles, rateCards,
-  bookings, selfDriveDetails,
+  users, customers, branches, vehicleClasses, vehicles, rateCards, addons,
+  bookings, selfDriveDetails, bookingAddons,
 } from '../src/schema/index.js'
 import { withTestDb } from './db.js'
 
@@ -33,7 +33,7 @@ async function fixtures() {
 describe('booking schema', () => {
   beforeEach(async () => {
     await db.execute(sql`
-      TRUNCATE TABLE booking_addons, self_drive_details, bookings,
+      TRUNCATE TABLE booking_addons, self_drive_details, bookings, addons,
                      rate_cards, vehicles, vehicle_classes, branches, customers, users
       RESTART IDENTITY CASCADE`)
   })
@@ -121,5 +121,48 @@ describe('booking schema', () => {
       WHERE pg_type.typname = 'booking_status'`)
     const labels = result.rows.map((r) => r.enumlabel)
     for (const state of states) expect(labels).toContain(state)
+  })
+
+  it('pins the addon price at booking time so later price changes do not apply (FR-17.7)', async () => {
+    const f = await fixtures()
+    const [addon] = await db.insert(addons).values({
+      name: 'Child seat', slug: 'child-seat-test', priceFils: 3000, priceModel: 'per_day',
+    }).returning()
+    const [booking] = await db.insert(bookings).values({
+      reference: 'AA-2026-000006', customerId: f.customer.id, product: 'self_drive',
+      vehicleId: f.vehicle.id, rateCardId: f.card.id,
+      startsAt: new Date('2026-08-01T08:00:00Z'),
+      endsAt: new Date('2026-08-03T08:00:00Z'),
+      subtotalFils: 24000, discountFils: 0, vatFils: 1200, totalFils: 25200, depositFils: 100000,
+    }).returning()
+    const [line] = await db.insert(bookingAddons).values({
+      bookingId: booking!.id, addonId: addon!.id, quantity: 2,
+      unitPriceFils: 3000, totalPriceFils: 6000,
+    }).returning()
+    expect(line!.unitPriceFils).toBe(3000)
+
+    // The catalogue price rises; the booked line must not move.
+    await db.update(addons).set({ priceFils: 5000 }).where(eq(addons.id, addon!.id))
+    const [reread] = await db.select().from(bookingAddons)
+      .where(eq(bookingAddons.id, line!.id))
+    expect(reread!.unitPriceFils).toBe(3000)
+    expect(reread!.totalPriceFils).toBe(6000)
+  })
+
+  it('refuses a second addon line for the same addon on one booking', async () => {
+    const f = await fixtures()
+    const [addon] = await db.insert(addons).values({
+      name: 'GPS', slug: 'gps-test', priceFils: 2000, priceModel: 'per_day',
+    }).returning()
+    const [booking] = await db.insert(bookings).values({
+      reference: 'AA-2026-000007', customerId: f.customer.id, product: 'self_drive',
+      vehicleId: f.vehicle.id, rateCardId: f.card.id,
+      startsAt: new Date('2026-08-01T08:00:00Z'),
+      endsAt: new Date('2026-08-03T08:00:00Z'),
+      subtotalFils: 24000, discountFils: 0, vatFils: 1200, totalFils: 25200, depositFils: 100000,
+    }).returning()
+    const line = { bookingId: booking!.id, addonId: addon!.id, quantity: 1, unitPriceFils: 2000, totalPriceFils: 2000 }
+    await db.insert(bookingAddons).values(line)
+    await expect(db.insert(bookingAddons).values(line)).rejects.toThrow()
   })
 })
