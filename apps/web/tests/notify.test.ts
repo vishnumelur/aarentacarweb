@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   consoleDriver, createRecordingDriver, driverFromEnv, type OutboundMessage,
 } from '../src/auth/notify.js'
@@ -38,5 +38,32 @@ describe('notification driver', () => {
     // The SMS provider is deliberately undecided. Selecting it must fail loudly at
     // startup rather than silently swallowing every OTP a customer waits for.
     expect(() => driverFromEnv('live')).toThrow(/no live notification provider/i)
+  })
+
+  describe('in production', () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    // `@types/node` types `NODE_ENV` as read-only on `ProcessEnv`, but this test
+    // genuinely needs to set it to exercise both branches. Write through an
+    // index-signature view rather than weakening what the test asserts.
+    const env = process.env as Record<string, string | undefined>
+
+    function restore(key: string, value: string | undefined): void {
+      if (value === undefined) delete env[key]
+      else env[key] = value
+    }
+
+    afterEach(() => {
+      restore('NODE_ENV', originalNodeEnv)
+    })
+
+    it('refuses to start when NOTIFY_DRIVER is unset, so no customer OTP is ever logged in prod', () => {
+      env.NODE_ENV = 'production'
+      expect(() => driverFromEnv(undefined)).toThrow(/NOTIFY_DRIVER is not set/i)
+    })
+
+    it('starts when NOTIFY_DRIVER is set explicitly, even in production', () => {
+      env.NODE_ENV = 'production'
+      expect(driverFromEnv('console')).toBe(consoleDriver)
+    })
   })
 })

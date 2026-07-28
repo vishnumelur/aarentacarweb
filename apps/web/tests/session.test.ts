@@ -39,6 +39,19 @@ describe('sessions', () => {
     expect(rows.rows[0]!.token_hash).toHaveLength(64)
   })
 
+  it('persists the ipAddress and userAgent it was created with', async () => {
+    const u = await makeUser('customer', '+971510101010')
+    await createSession({ db, clock: at('2026-08-01T10:00:00Z') }, {
+      userId: u.id, role: 'customer',
+      ipAddress: '203.0.113.7', userAgent: 'Mozilla/5.0 (test harness)',
+    })
+    const rows = await db.execute<{ ip_address: string; user_agent: string }>(
+      sql`SELECT ip_address, user_agent FROM sessions WHERE user_id = ${u.id}`,
+    )
+    expect(rows.rows[0]!.ip_address).toBe('203.0.113.7')
+    expect(rows.rows[0]!.user_agent).toBe('Mozilla/5.0 (test harness)')
+  })
+
   it('resolves a valid token to its user', async () => {
     const u = await makeUser('customer', '+971503333333')
     const clock = at('2026-08-01T10:00:00Z')
