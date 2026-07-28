@@ -42,11 +42,21 @@ describe('TOTP', () => {
 
   it('tolerates one period of clock skew either side', () => {
     const secret = generateTotpSecret()
-    const now = new Date('2026-08-01T10:00:00Z')
-    const justBefore = codeAt(secret, new Date('2026-08-01T09:59:45Z'))
-    const justAfter = codeAt(secret, new Date('2026-08-01T10:00:15Z'))
-    expect(verifyTotp(secret, justBefore, now)).toBe(true)
-    expect(verifyTotp(secret, justAfter, now)).toBe(true)
+    const now = new Date('2026-08-01T10:00:15Z')
+    // Windows align on 30-second boundaries. From 10:00:15 the previous window is
+    // 10:00:00-10:00:29's predecessor and the next begins at 10:00:30, so these two
+    // instants are genuinely in adjacent windows — not the same one.
+    const previousWindow = codeAt(secret, new Date('2026-08-01T09:59:45Z'))
+    const nextWindow = codeAt(secret, new Date('2026-08-01T10:00:45Z'))
+    expect(verifyTotp(secret, previousWindow, now)).toBe(true)
+    expect(verifyTotp(secret, nextWindow, now)).toBe(true)
+  })
+
+  it('refuses a code two periods away, beyond the tolerated window', () => {
+    const secret = generateTotpSecret()
+    const now = new Date('2026-08-01T10:00:15Z')
+    expect(verifyTotp(secret, codeAt(secret, new Date('2026-08-01T09:59:00Z')), now)).toBe(false)
+    expect(verifyTotp(secret, codeAt(secret, new Date('2026-08-01T10:01:30Z')), now)).toBe(false)
   })
 
   it('rejects a malformed token rather than throwing', () => {
@@ -55,5 +65,10 @@ describe('TOTP', () => {
     expect(verifyTotp(secret, '', now)).toBe(false)
     expect(verifyTotp(secret, 'abcdef', now)).toBe(false)
     expect(verifyTotp(secret, '12345678901234', now)).toBe(false)
+  })
+
+  it('rejects a well-formed token against a malformed secret rather than throwing', () => {
+    const now = new Date('2026-08-01T10:00:00Z')
+    expect(verifyTotp('not-valid-base32!!', '123456', now)).toBe(false)
   })
 })

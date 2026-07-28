@@ -10,6 +10,10 @@ export function generateTotpSecret(): string {
   return new OTPAuth.Secret({ size: 20 }).base32
 }
 
+/**
+ * Returns an otpauth:// URI embedding `secret` in plaintext, as enrolment QR codes
+ * require. Never log this value or include it in an error message.
+ */
 export function totpUri(secret: string, accountName: string): string {
   return new OTPAuth.TOTP({
     issuer: ISSUER, label: accountName,
