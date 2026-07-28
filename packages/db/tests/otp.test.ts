@@ -31,9 +31,17 @@ describe('phone OTP schema', () => {
   })
 
   it('indexes by phone so the sweeper and lookup do not scan', async () => {
-    const r = await db.execute<{ indexname: string }>(sql`
-      SELECT indexname FROM pg_indexes WHERE tablename = 'phone_otps'`)
-    expect(r.rows.map((x) => x.indexname).join(' ')).toContain('phone_otps_phone_idx')
+    const r = await db.execute<{ indexname: string; indexdef: string }>(sql`
+      SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'phone_otps'`)
+    const byName = new Map(r.rows.map((x) => [x.indexname, x.indexdef]))
+    expect(byName.get('phone_otps_phone_idx')).toMatch(/\(phone, created_at\)/)
+  })
+
+  it('indexes by IP so per-IP rate limiting does not scan (FR-13.3)', async () => {
+    const r = await db.execute<{ indexname: string; indexdef: string }>(sql`
+      SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'phone_otps'`)
+    const byName = new Map(r.rows.map((x) => [x.indexname, x.indexdef]))
+    expect(byName.get('phone_otps_ip_idx')).toMatch(/\(ip_address, created_at\)/)
   })
 
   it('allows several codes for one number, so a resend does not violate a constraint', async () => {

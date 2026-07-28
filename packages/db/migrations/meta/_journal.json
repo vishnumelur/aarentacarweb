@@ -134,6 +134,13 @@
       "when": 1785220651890,
       "tag": "0018_fearless_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785222575358,
+      "tag": "0019_wild_blockbuster",
+      "breakpoints": true
     }
   ]
 }

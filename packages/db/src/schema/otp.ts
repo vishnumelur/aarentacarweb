@@ -21,5 +21,8 @@ export const phoneOtps = pgTable('phone_otps', {
 }, (t) => [
   index('phone_otps_phone_idx').on(t.phone, t.createdAt),
   index('phone_otps_expiry_idx').on(t.expiresAt),
+  // FR-13.3 requires rate limiting per IP as well as per number. Without this, the
+  // per-IP window query scans a table that only grows.
+  index('phone_otps_ip_idx').on(t.ipAddress, t.createdAt),
   check('attempts_non_negative', sql`${t.attempts} >= 0`),
 ])

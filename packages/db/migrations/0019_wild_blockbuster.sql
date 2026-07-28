@@ -1,0 +1,1 @@
+CREATE INDEX "phone_otps_ip_idx" ON "phone_otps" USING btree ("ip_address","created_at");
