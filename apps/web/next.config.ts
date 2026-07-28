@@ -1,4 +1,17 @@
+import { resolve } from 'node:path'
+import { config as loadEnv } from 'dotenv'
 import type { NextConfig } from 'next'
+
+// Next loads `.env` from the app directory (`apps/web/.env`), but in this monorepo
+// the file lives once at the workspace root (`vitest.config.ts` and `tests/env.ts`
+// already load it from there for the test runner). Without this, `next dev`/`build`/
+// `start` start up cleanly — nothing here throws — and then every route that touches
+// the database 500s on its first request with "DATABASE_URL is not set". A missing
+// file at this path (e.g. in CI, which injects real environment variables directly)
+// is not an error: `dotenv`'s `config()` returns `{ error }` rather than throwing, so
+// the build is not broken by its absence — this call is intentionally not awaited or
+// asserted on.
+loadEnv({ path: resolve(import.meta.dirname, '../../.env') })
 
 const config: NextConfig = {
   // The workspace packages ship raw TypeScript rather than a build artefact, so Next
