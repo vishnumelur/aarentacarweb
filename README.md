@@ -3,7 +3,7 @@
 **Auto Assist Service (AA Rentals)** — Dubai car rental platform. Public booking site plus customer, chauffeur, manager and owner
 portals, sharing one database with a React Native / Expo mobile app.
 
-**Status:** design complete, implementation not started.
+**Status:** P1.1 foundation, P1.2 domain engines and P1.3 authentication are merged. 339 tests, CI green. Next up is P1.4, the public booking flow.
 
 ## Start here
 
