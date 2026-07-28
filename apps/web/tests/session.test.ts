@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { sql, eq } from 'drizzle-orm'
 import { getAppDb } from '../src/db.js'
 import { users } from '@aa/db'
@@ -98,12 +98,45 @@ describe('sessions', () => {
     expect(await resolveSession({ db, clock }, b.token)).toBeNull()
   })
 
-  it('sets a cookie that JavaScript cannot read and a browser will not leak (NFR-3)', () => {
-    const opts = sessionCookieOptions(new Date('2026-08-31T10:00:00Z'))
-    expect(SESSION_COOKIE).toBe('aa_session')
-    expect(opts.httpOnly).toBe(true)
-    expect(opts.sameSite).toBe('lax')
-    expect(opts.path).toBe('/')
-    expect(opts.secure).toBe(true)
+  describe('sessionCookieOptions', () => {
+    const originalNodeEnv = process.env.NODE_ENV
+
+    // `@types/node` types `NODE_ENV` as read-only on `ProcessEnv`, but this test
+    // genuinely needs to set it to exercise both branches. Write through an
+    // index-signature view rather than weakening what the test asserts.
+    const env = process.env as Record<string, string | undefined>
+
+    // Restores `NODE_ENV` to its exact original state — `delete` if it was absent,
+    // an assignment if it had a value. Assigning `undefined` directly would coerce
+    // to the string "undefined" rather than clearing the key, silently leaking
+    // state into whichever test file runs next.
+    function restore(key: string, value: string | undefined): void {
+      if (value === undefined) delete env[key]
+      else env[key] = value
+    }
+
+    afterEach(() => {
+      restore('NODE_ENV', originalNodeEnv)
+    })
+
+    it('is HttpOnly, SameSite=Lax, and path "/" regardless of environment (NFR-3)', () => {
+      const opts = sessionCookieOptions(new Date('2026-08-31T10:00:00Z'))
+      expect(SESSION_COOKIE).toBe('aa_session')
+      expect(opts.httpOnly).toBe(true)
+      expect(opts.sameSite).toBe('lax')
+      expect(opts.path).toBe('/')
+    })
+
+    it('is Secure in production (NFR-3)', () => {
+      env.NODE_ENV = 'production'
+      const opts = sessionCookieOptions(new Date('2026-08-31T10:00:00Z'))
+      expect(opts.secure).toBe(true)
+    })
+
+    it('is not Secure outside production, so a plain http://localhost dev server keeps the cookie', () => {
+      env.NODE_ENV = 'test'
+      const opts = sessionCookieOptions(new Date('2026-08-31T10:00:00Z'))
+      expect(opts.secure).toBe(false)
+    })
   })
 })

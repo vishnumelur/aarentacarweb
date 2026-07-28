@@ -119,7 +119,11 @@ export async function revokeAllForUser(deps: SessionDeps, userId: string): Promi
 export function sessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
-    secure: true,
+    // NFR-3 requires Secure in production. Over plain http://localhost a Secure cookie
+    // is silently dropped by the browser, so local development could never stay signed
+    // in. Conditional on the environment, never on a request header — a header is
+    // attacker-controlled and would let anyone downgrade the cookie.
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax' as const,
     path: '/',
     expires: expiresAt,
