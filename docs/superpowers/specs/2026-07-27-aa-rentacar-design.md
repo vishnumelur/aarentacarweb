@@ -484,7 +484,11 @@ Screen 15 spans P1 and P3 — the About, FAQ and Contact pages ship in P1; the b
    on first login without losing the booking.
 5. Password reset by emailed single-use token expiring in 30 minutes.
 6. Staff, chauffeur and owner accounts are created by an administrator, never self-registered.
-7. Sessions expire after 30 days of inactivity for customers, 12 hours for staff and owner.
+7. Sessions expire 30 days after sign-in for customers, 12 hours for staff and owner.
+   Expiry is measured from creation, not from last activity, and sessions are not
+   refreshed on use — a decision taken in P1.3. Sliding expiry would mean a database
+   write on every authenticated request; the cost is that an active customer is signed
+   out on day 30 and re-authenticates by SMS. Revisit if that proves annoying in practice.
 8. A customer may export all personal data held about them, and request deletion. Deletion
    anonymises rather than removes where financial records must be retained (NFR-4), replacing
    identifying fields while preserving the transaction.
