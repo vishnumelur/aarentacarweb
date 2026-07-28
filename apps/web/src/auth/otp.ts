@@ -46,6 +46,18 @@ function generateCode(): string {
  *
  * The code is never returned to the caller and never stored in plaintext, so neither
  * an API response nor a database dump hands anyone a live code.
+ *
+ * The cooldown check-then-insert runs inside a transaction holding
+ * `pg_advisory_xact_lock`, keyed by the phone number, for its whole duration. Without
+ * this, two concurrent requests for the same number can each run the "is there a
+ * recent row?" SELECT before either has committed its INSERT — both see no recent
+ * row, both pass the cooldown, and the customer is double-texted (and the SMS
+ * provider double-billed). A `SELECT ... FOR UPDATE` on the latest row would not
+ * close this: there is nothing to lock yet on a phone's very first request, which is
+ * exactly the case a burst of concurrent first-time requests hits. The advisory
+ * lock serializes concurrent callers for the *same phone* regardless of whether a
+ * row already exists, while callers for different phone numbers (a different lock
+ * key) do not block one another.
  */
 export async function requestOtp(
   deps: RequestDeps,
@@ -54,31 +66,43 @@ export async function requestOtp(
   if (!PHONE_PATTERN.test(input.phone)) return { ok: false, reason: 'invalid_phone' }
 
   const now = deps.clock()
-
-  const [latest] = await deps.db.select().from(phoneOtps)
-    .where(eq(phoneOtps.phone, input.phone))
-    .orderBy(desc(phoneOtps.createdAt)).limit(1)
-
-  if (latest !== undefined) {
-    const since = (now.getTime() - latest.createdAt.getTime()) / 1000
-    if (since < OTP_RESEND_COOLDOWN_SECONDS) return { ok: false, reason: 'cooldown' }
-  }
-
   const code = generateCode()
-  await deps.db.insert(phoneOtps).values({
-    phone: input.phone,
-    codeHash: hashCode(code),
-    expiresAt: new Date(now.getTime() + OTP_TTL_MINUTES * 60_000),
-    ipAddress: input.ipAddress ?? null,
-    // Set explicitly from the injected clock rather than left to the column's
-    // `defaultNow()`. The database would otherwise stamp the real wall-clock time,
-    // and every cooldown/expiry comparison in this module reads `createdAt` back
-    // against `deps.clock()` — a fixed test clock set to a date other than today
-    // (as every test here does) would then compare a fake "now" against a real
-    // insert time and get nonsense elapsed durations.
-    createdAt: now,
+
+  const outcome = await deps.db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.phone}))`)
+
+    const [latest] = await tx.select().from(phoneOtps)
+      .where(eq(phoneOtps.phone, input.phone))
+      .orderBy(desc(phoneOtps.createdAt)).limit(1)
+
+    if (latest !== undefined) {
+      const since = (now.getTime() - latest.createdAt.getTime()) / 1000
+      if (since < OTP_RESEND_COOLDOWN_SECONDS) {
+        return { ok: false, reason: 'cooldown' } as const
+      }
+    }
+
+    await tx.insert(phoneOtps).values({
+      phone: input.phone,
+      codeHash: hashCode(code),
+      expiresAt: new Date(now.getTime() + OTP_TTL_MINUTES * 60_000),
+      ipAddress: input.ipAddress ?? null,
+      // Set explicitly from the injected clock rather than left to the column's
+      // `defaultNow()`. The database would otherwise stamp the real wall-clock time,
+      // and every cooldown/expiry comparison in this module reads `createdAt` back
+      // against `deps.clock()` — a fixed test clock set to a date other than today
+      // (as every test here does) would then compare a fake "now" against a real
+      // insert time and get nonsense elapsed durations.
+      createdAt: now,
+    })
+
+    return { ok: true } as const
   })
 
+  if (!outcome.ok) return outcome
+
+  // Sent after the transaction commits, and outside the lock: the lock only needs
+  // to cover the decide-and-write step, not the network call to the SMS provider.
   await deps.notify.send({
     channel: 'sms',
     to: input.phone,
@@ -104,13 +128,23 @@ export async function requestOtp(
  * `attempts = 4`, both write back `5`, and a brute-force attacker gets more guesses
  * than the limit allows.
  *
- * This makes the *increment* race-free. The remaining gap — several concurrent
- * requests each reading the same "not yet locked" `pending` row before any of
- * their increments commit, so more than one gets to test its guess against the
- * hash — would need the read and the conditional increment to happen as one
- * atomic step (e.g. a single `UPDATE ... RETURNING` that also carries the guess,
- * or `SELECT ... FOR UPDATE` inside a transaction) rather than a separate
- * `SELECT` followed by an `UPDATE`.
+ * This makes the *increment* race-free — the stored counter can never read higher
+ * than `OTP_MAX_ATTEMPTS`. It does NOT cap concurrent guesses, and callers (Task 7's
+ * route handler in particular) must not read "attempts capped at 5" as "at most 5
+ * guesses are ever tested." Every concurrent request reads the same "not yet
+ * locked" `pending` row and evaluates `hashCode(input.code) !== pending.codeHash`
+ * against it before any of their increments commit — nothing here blocks a second,
+ * third, or Nth concurrent caller from testing its own guess against the hash while
+ * the first caller's increment is still in flight. A burst of, say, 20 parallel
+ * guesses all get compared against the hash even though `attempts` tops out at 5
+ * once the dust settles, so this bounds brute-force *rate* (one wrong code costs one
+ * of five sequential attempts) but not a concurrent brute-force *burst*. Closing
+ * that gap needs the read and the conditional increment to happen as one atomic
+ * step — e.g. `SELECT ... FOR UPDATE` on `pending` inside a transaction, so a second
+ * concurrent caller blocks on the row lock until the first's attempt (and its
+ * increment) has committed, rather than reading a stale, pre-increment `attempts`
+ * concurrently. That row-level locking is a bigger change than this function
+ * currently makes and is deliberately not implemented here.
  */
 export async function verifyOtp(
   deps: OtpDeps,
@@ -137,8 +171,22 @@ export async function verifyOtp(
     return { ok: false, reason: 'incorrect_code' }
   }
 
-  await deps.db.update(phoneOtps)
+  // Conditional, and the result is decided by the row count, not the prior SELECT:
+  // under READ COMMITTED a plain SELECT never blocks, so several concurrent callers
+  // can all read `consumedAt IS NULL` before any of their UPDATEs commit. An
+  // unconditional `SET consumedAt = now()` would then let every one of them "win" —
+  // each replaying the same code into its own session (Task 7 mints one session per
+  // successful verification). Guarding the UPDATE on `consumedAt IS NULL` means only
+  // the first commit actually changes the row; every later commit for the same
+  // `id` matches zero rows and is told, correctly, that there was nothing left to
+  // consume.
+  const consumed = await deps.db.update(phoneOtps)
     .set({ consumedAt: now })
-    .where(eq(phoneOtps.id, pending.id))
+    .where(and(eq(phoneOtps.id, pending.id), isNull(phoneOtps.consumedAt)))
+    .returning({ id: phoneOtps.id })
+
+  // Exactly one caller wins the race. Everyone else sees zero rows: the code was
+  // already consumed between our SELECT and our UPDATE, so this attempt is a replay.
+  if (consumed.length === 0) return { ok: false, reason: 'no_pending_code' }
   return { ok: true }
 }

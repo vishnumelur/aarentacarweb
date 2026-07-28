@@ -155,4 +155,55 @@ describe('phone OTP', () => {
     // does not, so this must equal exactly the number of concurrent calls made.
     expect(rows.rows[0]!.attempts).toBe(CONCURRENT)
   })
+
+  it('lets exactly one concurrent verification of the correct code succeed', async () => {
+    const notify = createRecordingDriver()
+    const clock = at('2026-08-01T10:00:00Z')
+    await requestOtp({ db, notify, clock }, { phone: PHONE })
+    const code = codeFrom(notify)
+
+    const CONCURRENT = 10
+    // Pre-warm the pool: opening a connection has setup latency that otherwise
+    // serializes an initial burst (each call queues for its own fresh connection
+    // rather than truly overlapping). Once every connection already exists, the
+    // concurrent calls below dispatch their queries at essentially the same
+    // instant, which is what actually exercises the race.
+    await Promise.all(Array.from({ length: CONCURRENT }, () => db.execute(sql`SELECT 1`)))
+
+    const results = await Promise.all(
+      Array.from({ length: CONCURRENT }, () =>
+        verifyOtp({ db, clock }, { phone: PHONE, code })),
+    )
+
+    // Under READ COMMITTED, a plain SELECT does not block: every concurrent caller
+    // can read `consumedAt IS NULL` before any of their UPDATEs commit, so an
+    // unconditional `UPDATE ... SET consumedAt = now()` lets every one of them
+    // "consume" the code and report success. Only a conditional
+    // `UPDATE ... WHERE consumedAt IS NULL` — where the database, not a prior
+    // read, decides who wins — can guarantee exactly one winner.
+    const succeeded = results.filter((r) => r.ok)
+    expect(succeeded).toHaveLength(1)
+  })
+
+  it('rate-limits concurrent resend requests for one number to a single SMS', async () => {
+    const notify = createRecordingDriver()
+    const clock = at('2026-08-01T10:00:00Z')
+
+    const CONCURRENT = 8
+    // See the comment in the verification race test above: pre-warm the pool so
+    // the burst below genuinely overlaps rather than serializing on connection setup.
+    await Promise.all(Array.from({ length: CONCURRENT }, () => db.execute(sql`SELECT 1`)))
+
+    await Promise.all(
+      Array.from({ length: CONCURRENT }, () =>
+        requestOtp({ db, notify, clock }, { phone: PHONE })),
+    )
+
+    // Two concurrent requests can each read "no recent row" before either has
+    // committed its insert, so an unguarded check-then-insert lets every one of
+    // them through the cooldown — double-billing the SMS provider and
+    // double-texting the customer. Only one of these concurrent calls for the
+    // same number, all at the same instant, should ever reach the notifier.
+    expect(notify.sent).toHaveLength(1)
+  })
 })
