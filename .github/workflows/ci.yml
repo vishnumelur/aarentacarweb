@@ -30,6 +30,9 @@ jobs:
       DATABASE_URL_TEST: postgresql://aarental:devpassword@localhost:5432/aarental_test
       TZ: UTC
       NOTIFY_DRIVER: console
+      # CI-only pepper for OTP hash tests (apps/web/src/auth/otp.ts). Not a real
+      # secret — never reused outside this workflow.
+      OTP_PEPPER: ci-only-otp-pepper-0000000000000000000000000000
 
     steps:
       - uses: actions/checkout@v4
@@ -67,3 +70,13 @@ jobs:
 
       - name: Enforce domain engine coverage (NFR-9)
         run: pnpm --filter @aa/shared test:coverage
+
+      - name: Assert the web test suite actually ran
+        run: |
+          pnpm --filter @aa/web exec vitest run --reporter=json --outputFile=/tmp/web-tests.json
+          COUNT=$(node -e "console.log(require('/tmp/web-tests.json').numTotalTests)")
+          echo "web tests executed: $COUNT"
+          if [ "$COUNT" -lt 90 ]; then
+            echo "::error::Expected at least 90 web tests, got $COUNT."
+            exit 1
+          fi
