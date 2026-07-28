@@ -127,6 +127,13 @@
       "when": 1785164267994,
       "tag": "0017_bookings_no_vehicle_overlap",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785220651890,
+      "tag": "0018_fearless_klaw",
+      "breakpoints": true
     }
   ]
 }
