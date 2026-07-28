@@ -7,6 +7,13 @@ portals, sharing one database with a React Native / Expo mobile app.
 
 ## Start here
 
+**[`STATUS.md`](STATUS.md)** — where the project stands, how to run it, what to do next.
+Read that first when picking this back up.
+
+## Reference
+
+
+
 **Design spec —** [`docs/superpowers/specs/2026-07-27-aa-rentacar-design.md`](docs/superpowers/specs/2026-07-27-aa-rentacar-design.md)
 Source of truth for *what* to build: architecture, server sizing, domain model, all 83 screens,
 functional requirements, non-functional requirements and build phases.
