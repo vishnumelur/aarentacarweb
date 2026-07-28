@@ -16,20 +16,24 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
  * is supposed to refuse to connect at all.
  */
 export function connectionString(): string {
+  // Checked FIRST and unconditionally. A test-harness variable leaking into a real
+  // deployment (a stray VITEST=true from a shared CI image, say) must not be able to
+  // short-circuit past this via the isTest branch below — serving customers from
+  // test data is worse than refusing to start.
+  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL_TEST !== undefined) {
+    throw new Error(
+      'DATABASE_URL_TEST is set in a production environment. Refusing to start — ' +
+        'remove it, or the app may serve real customers from test data.',
+    )
+  }
+
   const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
   if (isTest) {
     const testUrl = process.env.DATABASE_URL_TEST
     if (testUrl === undefined) throw new Error('DATABASE_URL_TEST is not set')
     return testUrl
   }
-  if (process.env.DATABASE_URL_TEST !== undefined && process.env.NODE_ENV === 'production') {
-    // Loud, not silent: serving customers from the test database is worse than not
-    // starting at all.
-    throw new Error(
-      'DATABASE_URL_TEST is set in a production environment. Refusing to start — ' +
-        'remove it, or the app may serve real customers from test data.',
-    )
-  }
+
   const url = process.env.DATABASE_URL
   if (url === undefined) throw new Error('DATABASE_URL is not set')
   return url

@@ -12,11 +12,22 @@ describe('connectionString', () => {
   const originalNodeEnv = process.env.NODE_ENV
   const originalVitest = process.env.VITEST
   const originalTestUrl = process.env.DATABASE_URL_TEST
+  const originalUrl = process.env.DATABASE_URL
+
+  // Restores every variable a test might have touched to its exact original state —
+  // `delete` for keys that were absent, an assignment for keys that had a value.
+  // Assigning `undefined` directly would coerce to the string "undefined" rather
+  // than clearing the key, silently leaking state into whichever test runs next.
+  function restore(key: string, value: string | undefined): void {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv
-    process.env.VITEST = originalVitest
-    process.env.DATABASE_URL_TEST = originalTestUrl
+    restore('NODE_ENV', originalNodeEnv)
+    restore('VITEST', originalVitest)
+    restore('DATABASE_URL_TEST', originalTestUrl)
+    restore('DATABASE_URL', originalUrl)
   })
 
   it('chooses DATABASE_URL_TEST under vitest', () => {
@@ -38,5 +49,17 @@ describe('connectionString', () => {
     process.env.DATABASE_URL_TEST = 'postgres://fake-test-db:5432/should_never_be_used'
 
     expect(() => connectionString()).toThrow(/DATABASE_URL_TEST is set in a production environment/)
+  })
+
+  it('refuses production even when a test-harness variable has leaked in', () => {
+    // NODE_ENV=production with a stray VITEST=true must not take the test branch —
+    // the production refusal has to be checked first and unconditionally, or a
+    // leaked CI/base-image variable bypasses it entirely.
+    process.env.NODE_ENV = 'production'
+    process.env.VITEST = 'true'
+    process.env.DATABASE_URL_TEST = 'postgresql://x@localhost:5432/test'
+    process.env.DATABASE_URL = 'postgresql://x@localhost:5432/prod'
+
+    expect(() => connectionString()).toThrow(/production/i)
   })
 })
