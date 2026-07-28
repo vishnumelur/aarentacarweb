@@ -67,3 +67,13 @@ jobs:
 
       - name: Enforce domain engine coverage (NFR-9)
         run: pnpm --filter @aa/shared test:coverage
+
+      - name: Assert the web test suite actually ran
+        run: |
+          pnpm --filter @aa/web exec vitest run --reporter=json --outputFile=/tmp/web-tests.json
+          COUNT=$(node -e "console.log(require('/tmp/web-tests.json').numTotalTests)")
+          echo "web tests executed: $COUNT"
+          if [ "$COUNT" -lt 90 ]; then
+            echo "::error::Expected at least 90 web tests, got $COUNT."
+            exit 1
+          fi
