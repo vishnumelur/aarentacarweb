@@ -1,0 +1,2 @@
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_terms_version_terms_versions_version_fk" FOREIGN KEY ("terms_version") REFERENCES "public"."terms_versions"("version") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "handovers" ADD CONSTRAINT "handovers_terms_version_terms_versions_version_fk" FOREIGN KEY ("terms_version") REFERENCES "public"."terms_versions"("version") ON DELETE no action ON UPDATE no action;

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: aarental
+          POSTGRES_PASSWORD: devpassword
+          POSTGRES_DB: aarental_test
+          TZ: UTC
+          PGTZ: UTC
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U aarental"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://aarental:devpassword@localhost:5432/aarental_test
+      DATABASE_URL_TEST: postgresql://aarental:devpassword@localhost:5432/aarental_test
+      TZ: UTC
+      NOTIFY_DRIVER: console
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      # The services block's healthcheck already blocks job steps until Postgres is
+      # ready, so this should always be a no-op — but it fails the build loudly (and
+      # visibly in the log, before test output) if the service container is ever
+      # unreachable instead of letting the test harness silently fall back to an
+      # embedded Postgres, which would mean CI stopped testing what it claims to.
+      - name: Confirm the Postgres service container is reachable
+        run: pg_isready -h localhost -p 5432 -U aarental
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      - name: Assert the database test suite actually ran
+        run: |
+          pnpm --filter @aa/db exec vitest run --reporter=json --outputFile=/tmp/db-tests.json
+          COUNT=$(node -e "console.log(require('/tmp/db-tests.json').numTotalTests)")
+          echo "database tests executed: $COUNT"
+          if [ "$COUNT" -lt 80 ]; then
+            echo "::error::Expected at least 80 database tests, got $COUNT. CI is not testing the schema."
+            exit 1
+          fi
+
+      - name: Enforce domain engine coverage (NFR-9)
+        run: pnpm --filter @aa/shared test:coverage

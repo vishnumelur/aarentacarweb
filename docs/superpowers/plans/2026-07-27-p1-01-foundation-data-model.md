@@ -38,7 +38,7 @@ Copied verbatim from the spec. Every task inherits these.
 - Create: `tsconfig.base.json`
 - Create: `.nvmrc`
 - Create: `vitest.config.ts`
-- Create: `.github/workflows/ci.yml` (stub, extended in Task 11)
+- Create: `.github/workflows/ci.yml` (stub, extended in Task 12)
 
 **Interfaces:**
 - Consumes: nothing (first task)
@@ -435,8 +435,9 @@ import { createDb } from '../src/client.js'
 describe('database client', () => {
   it('connects and reports Postgres 17 or later', async () => {
     const db = createDb(process.env.DATABASE_URL_TEST!)
-    const result = await db.execute<{ version: string }>(sql`SHOW server_version`)
-    const major = Number(String(result.rows[0]!.version).split('.')[0])
+    // `SHOW server_version` names its column `server_version`, not `version`.
+    const result = await db.execute<{ server_version: string }>(sql`SHOW server_version`)
+    const major = Number(String(result.rows[0]!.server_version).split('.')[0])
     expect(major).toBeGreaterThanOrEqual(17)
   })
 
@@ -531,8 +532,13 @@ export {}
 `packages/db/drizzle.config.ts`:
 
 ```typescript
-import 'dotenv/config'
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
 import { defineConfig } from 'drizzle-kit'
+
+// drizzle-kit bundles this file as CJS, where `import.meta.dirname` is unavailable,
+// so resolve relative to cwd — drizzle-kit is always invoked from packages/db.
+config({ path: resolve(process.cwd(), '../../.env') })
 
 export default defineConfig({
   schema: './src/schema/index.ts',
@@ -547,9 +553,12 @@ export default defineConfig({
 `packages/db/src/migrate.ts`:
 
 ```typescript
-import 'dotenv/config'
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { createDb } from './client.js'
+
+config({ path: resolve(import.meta.dirname, '../../../.env') })
 
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('DATABASE_URL is not set')
@@ -573,17 +582,33 @@ export async function setup(): Promise<void> {
 }
 ```
 
+`packages/db/tests/env.ts` — loads the workspace-root `.env`. `dotenv/config` alone
+resolves relative to the process cwd, which is `packages/db` under `pnpm --filter`, so the
+root file is never found:
+
+```typescript
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
+
+config({ path: resolve(import.meta.dirname, '../../../.env') })
+```
+
 `packages/db/vitest.config.ts`:
 
 ```typescript
+import { resolve } from 'node:path'
+import { config } from 'dotenv'
 import { defineConfig } from 'vitest/config'
+
+// Loaded at config-evaluation time so globalSetup sees the variables too.
+config({ path: resolve(import.meta.dirname, '../../.env') })
 
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
     globalSetup: ['./tests/setup.ts'],
-    setupFiles: ['dotenv/config'],
+    setupFiles: ['./tests/env.ts'],
     fileParallelism: false,
   },
 })
@@ -700,7 +725,7 @@ Expected: FAIL — `The requested module '../src/schema/index.js' does not provi
 `packages/db/src/schema/identity.ts`:
 
 ```typescript
-import { pgTable, pgEnum, uuid, text, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, uuid, text, integer, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
 
 export const userRole = pgEnum('user_role', ['customer', 'chauffeur', 'staff', 'owner'])
 
@@ -715,7 +740,7 @@ export const users = pgTable('users', {
   branchId: uuid('branch_id'),
   isActive: boolean('is_active').notNull().default(true),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
-  failedLoginCount: text('failed_login_count').notNull().default('0'),
+  failedLoginCount: integer('failed_login_count').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('users_role_idx').on(t.role)])
@@ -990,6 +1015,10 @@ export const branchHours = pgTable('branch_hours', {
   closesAt: time('closes_at').notNull(),
 }, (t) => [
   index('branch_hours_branch_idx').on(t.branchId, t.weekday),
+  // Without this, the seed's onConflictDoNothing() has no arbiter to match and silently
+  // becomes a no-op — every reseed doubles the opening hours, and duplicated intervals
+  // produce duplicated booking time slots.
+  unique('branch_hours_unique').on(t.branchId, t.weekday, t.opensAt),
   check('weekday_range', sql`${t.weekday} BETWEEN 0 AND 6`),
   check('opens_before_closes', sql`${t.opensAt} < ${t.closesAt}`),
 ])
@@ -1028,10 +1057,12 @@ export const vehicles = pgTable('vehicles', {
   check('year_sane', sql`${t.year} BETWEEN 1990 AND 2100`),
 ])
 
-// FR-7.2 — expiry drives automatic blocking
+// FR-7.2 — expiry drives automatic blocking.
+// `restrict`, not `cascade`: mulkiya and insurance records are compliance artifacts. A
+// vehicle is retired via status, never deleted; an accidental DELETE must fail loudly.
 export const vehicleDocuments = pgTable('vehicle_documents', {
   id: uuid('id').primaryKey().defaultRandom(),
-  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'restrict' }),
   type: vehicleDocumentType('type').notNull(),
   documentNumber: text('document_number'),
   expiresOn: date('expires_on').notNull(),
@@ -1050,10 +1081,12 @@ export const vehiclePhotos = pgTable('vehicle_photos', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('vehicle_photos_vehicle_idx').on(t.vehicleId)])
 
-// FR-7.3, FR-7.4 — an open job makes the vehicle unavailable
+// FR-7.3, FR-7.4 — an open job makes the vehicle unavailable.
+// `restrict`: maintenance and cost history feeds fleet ROI reporting (FR-19.3) and must
+// survive any attempt to delete the vehicle.
 export const maintenanceJobs = pgTable('maintenance_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+  vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'restrict' }),
   status: maintenanceStatus('status').notNull().default('open'),
   reason: text('reason').notNull(),
   startsOn: date('starts_on').notNull(),
@@ -1231,6 +1264,12 @@ export const rateCards = pgTable('rate_cards', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('rate_cards_class_validity_idx').on(t.classId, t.validFrom),
+  // FR-17.7 — at most one open-ended (current) rate card per class. Without this, two
+  // cards could both claim to be in force and "which rate applies" is unanswerable
+  // from the data alone.
+  uniqueIndex('rate_cards_one_current_per_class')
+    .on(t.classId)
+    .where(sql`${t.validTo} IS NULL`),
   check('daily_rate_non_negative', sql`${t.dailyRateFils} >= 0`),
   check('deposit_non_negative', sql`${t.depositFils} >= 0`),
   check('validity_ordered', sql`${t.validTo} IS NULL OR ${t.validTo} >= ${t.validFrom}`),
@@ -1281,6 +1320,10 @@ export const promoCodes = pgTable('promo_codes', {
   discountValue: integer('discount_value').notNull(),
   validFrom: date('valid_from').notNull(),
   validTo: date('valid_to').notNull(),
+  // FR-17.4 — which products this code applies to. NULL means all products.
+  // A text array rather than the bookingProduct enum: that enum lives in booking.ts,
+  // which imports from this file, and an enum reference here would be circular.
+  applicableProducts: text('applicable_products').array(),
   minBookingValueFils: integer('min_booking_value_fils').notNull().default(0),
   totalUsageCap: integer('total_usage_cap'),
   perCustomerCap: integer('per_customer_cap').notNull().default(1),
@@ -1526,10 +1569,22 @@ export const bookings = pgTable('bookings', {
   index('bookings_status_start_idx').on(t.status, t.startsAt),
   index('bookings_customer_idx').on(t.customerId),
   index('bookings_vehicle_range_idx').on(t.vehicleId, t.startsAt, t.endsAt),
+  // FR-3.3 — the sweeper scans PENDING_PAYMENT bookings past their expiry. The
+  // (status, startsAt) index does not serve that query.
+  index('bookings_expiry_idx').on(t.expiresAt).where(sql`${t.expiresAt} IS NOT NULL`),
   check('range_ordered', sql`${t.endsAt} > ${t.startsAt}`),
   check('totals_non_negative', sql`
     ${t.subtotalFils} >= 0 AND ${t.vatFils} >= 0
     AND ${t.totalFils} >= 0 AND ${t.depositFils} >= 0`),
+  // The money must add up. VAT applies to the discounted subtotal; the deposit is a
+  // separate hold and is deliberately not part of the total. Without this, a pricing
+  // bug persists self-inconsistent totals that no later reconciliation can detect.
+  check('totals_consistent', sql`
+    ${t.totalFils} = ${t.subtotalFils} - ${t.discountFils} + ${t.vatFils}`),
+  // A self-drive booking without a vehicle is meaningless. Chauffeur bookings may
+  // legitimately have none until dispatch assigns one.
+  check('self_drive_needs_vehicle', sql`
+    ${t.product} <> 'self_drive' OR ${t.vehicleId} IS NOT NULL`),
 ])
 
 export const selfDriveDetails = pgTable('self_drive_details', {

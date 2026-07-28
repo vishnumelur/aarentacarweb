@@ -1,0 +1,132 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1785156518547,
+      "tag": "0000_thin_lester",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785156808568,
+      "tag": "0001_lowly_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785157409274,
+      "tag": "0002_remarkable_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785157703916,
+      "tag": "0003_steady_greymalkin",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785158034940,
+      "tag": "0004_flaky_ben_grimm",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785158406040,
+      "tag": "0005_add_bookings",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785158867764,
+      "tag": "0006_charming_typhoid_mary",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785159365391,
+      "tag": "0007_breezy_namor",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785159740805,
+      "tag": "0008_handover_append_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785160154634,
+      "tag": "0009_neat_layla_miller",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785160464724,
+      "tag": "0010_gapless_invoice_numbers",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785161036279,
+      "tag": "0011_giant_carnage",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785161355006,
+      "tag": "0012_redundant_medusa",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785162209669,
+      "tag": "0013_flawless_red_ghost",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785164220112,
+      "tag": "0014_eminent_otto_octavius",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1785164234344,
+      "tag": "0015_users_branch_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1785164254266,
+      "tag": "0016_handovers_append_only_generic",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785164267994,
+      "tag": "0017_bookings_no_vehicle_overlap",
+      "breakpoints": true
+    }
+  ]
+}

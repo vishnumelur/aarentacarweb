@@ -1,0 +1,21 @@
+{
+  "name": "aarentacar",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "typecheck": "tsc --noEmit && turbo run typecheck",
+    "test": "vitest run && turbo run test",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "db:migrate": "pnpm --filter @aa/db migrate",
+    "db:seed": "pnpm --filter @aa/db seed",
+    "db:generate": "pnpm --filter @aa/db generate"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

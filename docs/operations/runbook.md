@@ -557,6 +557,12 @@ Record the wall-clock time. That number is your real RTO, not the 4 hours in the
 - [ ] Fail2ban on the Caddy container for auth endpoints
 - [ ] GHCR token on the node is **read-only**
 - [ ] Deploy SSH key is a dedicated `deploy` user, not root
+- [ ] **The application's database role cannot `TRUNCATE`.** `handovers` and `inspection_photos`
+      are protected against UPDATE and DELETE by row-level triggers (migration `0008`), but
+      `TRUNCATE` fires no row triggers and would erase dispute evidence silently. The app role
+      needs INSERT/SELECT/UPDATE/DELETE and nothing more — it must not own these tables:
+      `REVOKE TRUNCATE ON handovers, inspection_photos FROM aarental;`
+      Verify with `\dp handovers` that no TRUNCATE privilege is granted.
 
 Regarding PDPL: the KYC bucket holds passport and Emirates ID scans. Access must be via signed
 URLs with short expiry, every access logged, and a documented retention period.
@@ -590,6 +596,8 @@ Postgres separate at 2 cores / 4 GB. Below that, Postgres starts swapping and ev
 | Jobs not running | Redis reachable from 214? `docker compose logs worker` |
 | Postgres won't accept connections | `pg_hba.conf` peer IP; `max_connections` exhausted |
 | Container won't start after reboot | `--onboot 1` set? `pct config <CTID> \| grep onboot` |
+| `permission denied ... /var/run/docker.sock` | Your shell predates `usermod -aG docker`. A shell's group list is fixed at login, and `newgrp docker` appended to an install chain exits with its own subshell. Open a new terminal, or prefix with `sudo` once. |
+| `pg_isready: command not found`, service reported DOWN | Client tools live on the host, not in the images. `scripts/check-services.sh` probes TCP directly and needs none — but to query the database install them: `sudo apt-get install -y postgresql-client redis-tools`. A missing tool is not a down service. |
 
 Logs: application `docker compose logs -f` on 213/214 · Postgres `/var/log/postgresql/` ·
 Caddy `journalctl -u caddy -f` · MinIO `journalctl -u minio -f`.

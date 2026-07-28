@@ -1,0 +1,1 @@
+ALTER TABLE "branch_hours" ADD CONSTRAINT "branch_hours_unique" UNIQUE("branch_id","weekday","opens_at");
