@@ -42,13 +42,42 @@ describe('PDPL export and anonymise (FR-13.8)', () => {
     expect(after!.isActive).toBe(false)
   })
 
-  it('writes an audit entry naming the actor (FR-11.3)', async () => {
+  it('writes an audit entry naming the actor (FR-11.3), with the erased values redacted', async () => {
     const u = await aCustomer('+971503333333')
     await anonymiseUser({ db, clock }, { userId: u.id, actorUserId: u.id })
     const entries = await db.select().from(auditLog).where(eq(auditLog.entityId, u.id))
     expect(entries).toHaveLength(1)
     expect(entries[0]!.action).toBe('anonymise')
     expect(entries[0]!.actorUserId).toBe(u.id)
+    // FR-13.8: the audit log is immutable with no update/delete path, so it must
+    // not become a permanent backdoor to the values the customer asked erased.
+    expect(entries[0]!.before).toEqual({ phone: '[redacted]', email: '[redacted]', fullName: '[redacted]' })
+    expect(entries[0]!.after).toMatchObject({ email: null, fullName: 'Anonymised' })
+    expect(JSON.stringify(entries[0])).not.toContain('+971503333333')
+  })
+
+  it('erases a suspended (isActive: false) account rather than silently no-oping', async () => {
+    const u = await aCustomer('+971506666666')
+    await db.update(users).set({ isActive: false }).where(eq(users.id, u.id))
+
+    await anonymiseUser({ db, clock }, { userId: u.id, actorUserId: u.id })
+
+    const [after] = await db.select().from(users).where(eq(users.id, u.id))
+    expect(after!.phone).not.toBe('+971506666666')
+    expect(after!.email).toBeNull()
+    expect(after!.fullName).not.toBe('Aisha Khan')
+
+    const entries = await db.select().from(auditLog).where(eq(auditLog.entityId, u.id))
+    expect(entries).toHaveLength(1)
+  })
+
+  it('does not write a second audit row when anonymising an already-anonymised account', async () => {
+    const u = await aCustomer('+971507777777')
+    await anonymiseUser({ db, clock }, { userId: u.id, actorUserId: u.id })
+    await anonymiseUser({ db, clock }, { userId: u.id, actorUserId: u.id })
+
+    const entries = await db.select().from(auditLog).where(eq(auditLog.entityId, u.id))
+    expect(entries).toHaveLength(1)
   })
 
   it('leaves no way to recover the original phone from the anonymised row', async () => {
