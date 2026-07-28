@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { sql } from 'drizzle-orm'
 import { getAppDb } from '../src/db.js'
 import { POST as requestRoute } from '../src/app/api/v1/auth/otp/request/route.js'
@@ -148,7 +148,7 @@ describe('auth routes', () => {
       return (res.headers.get('set-cookie') ?? '').split(';')[0]!
     }
 
-    it('deletes the session row and clears the cookie', async () => {
+    it('signs out and clears the cookie', async () => {
       const cookie = await signIn()
 
       const before = await db.execute<{ count: string }>(sql`SELECT count(*) FROM sessions`)
@@ -171,9 +171,54 @@ describe('auth routes', () => {
       expect(me.status).toBe(401)
     })
 
-    it('rejects an unauthenticated logout with 401, not a silent no-op', async () => {
+    it('succeeds with no cookie at all', async () => {
       const res = await logoutRoute(new Request('http://localhost/api/v1/auth/logout', { method: 'POST' }))
-      expect(res.status).toBe(401)
+      expect(res.status).toBe(200)
+      expect((await res.json()).ok).toBe(true)
+      // Sign-out is idempotent: even with nothing to revoke, the response still
+      // carries the cookie-clearing header, so a client that calls this
+      // defensively during error recovery always ends up with no cookie.
+      const setCookie = res.headers.get('set-cookie') ?? ''
+      expect(setCookie).toContain('aa_session=;')
+      expect(setCookie).toContain('Max-Age=0')
+    })
+
+    it('succeeds with an expired or unknown token, without throwing', async () => {
+      const res = await logoutRoute(new Request('http://localhost/api/v1/auth/logout', {
+        method: 'POST',
+        // Syntactically valid (base64url, long enough to look real) but not a
+        // token any session was ever issued — revokeSession matches zero rows.
+        headers: { cookie: `aa_session=${'a'.repeat(43)}` },
+      }))
+      expect(res.status).toBe(200)
+      const setCookie = res.headers.get('set-cookie') ?? ''
+      expect(setCookie).toContain('aa_session=;')
+      expect(setCookie).toContain('Max-Age=0')
+    })
+
+    describe('Secure flag on the clearing cookie', () => {
+      const originalNodeEnv = process.env.NODE_ENV
+      // Same index-signature workaround session.test.ts uses: @types/node marks
+      // NODE_ENV read-only, but this test genuinely needs to set it.
+      const env = process.env as Record<string, string | undefined>
+
+      afterEach(() => {
+        if (originalNodeEnv === undefined) delete env.NODE_ENV
+        else env.NODE_ENV = originalNodeEnv
+      })
+
+      it('is not Secure outside production, matching sessionCookieOptions', async () => {
+        env.NODE_ENV = 'test'
+        const res = await logoutRoute(new Request('http://localhost/api/v1/auth/logout', { method: 'POST' }))
+        expect(res.headers.get('set-cookie') ?? '').not.toContain('Secure')
+      })
+
+      it('is Secure in production, matching sessionCookieOptions — otherwise a real, ' +
+        'Secure-flagged session cookie would survive "logout"', async () => {
+        env.NODE_ENV = 'production'
+        const res = await logoutRoute(new Request('http://localhost/api/v1/auth/logout', { method: 'POST' }))
+        expect(res.headers.get('set-cookie') ?? '').toContain('Secure')
+      })
     })
   })
 })
