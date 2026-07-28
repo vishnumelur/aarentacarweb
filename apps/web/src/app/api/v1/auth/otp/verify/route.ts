@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { users, customers } from '@aa/db'
 import { getAppDb } from '@/db'
 import { systemClock } from '@/auth/clock'
+import { clientIp } from '@/auth/guard'
 import { verifyOtp } from '@/auth/otp'
 import { createSession, SESSION_COOKIE, sessionCookieOptions } from '@/auth/session'
 import { normalizeUaePhone } from '@/auth/phone'
@@ -38,7 +39,7 @@ export async function POST(request: Request): Promise<Response> {
     {
       userId: user!.id,
       role: user!.role,
-      ipAddress: request.headers.get('x-forwarded-for') ?? undefined,
+      ipAddress: clientIp(request),
       userAgent: request.headers.get('user-agent') ?? undefined,
     },
   )

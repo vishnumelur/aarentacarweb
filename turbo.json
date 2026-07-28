@@ -14,6 +14,7 @@
     "S3_BUCKET_VEHICLES",
     "SESSION_SECRET",
     "NOTIFY_DRIVER",
+    "OTP_PEPPER",
     "NODE_ENV",
     "TZ",
     "CI"
@@ -21,6 +22,7 @@
   "tasks": {
     "typecheck": { "dependsOn": ["^typecheck"] },
     "test": { "dependsOn": ["^build"] },
+    "@aa/web#test": { "dependsOn": ["^build", "@aa/db#test"] },
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**", "!.next/cache/**"] },
     "lint": {}
   }

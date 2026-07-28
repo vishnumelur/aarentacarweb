@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { getAppDb } from '@/db'
 import { systemClock } from '@/auth/clock'
+import { clientIp } from '@/auth/guard'
 import { driverFromEnv } from '@/auth/notify'
 import { requestOtp } from '@/auth/otp'
 import { normalizeUaePhone } from '@/auth/phone'
@@ -23,11 +24,11 @@ export async function POST(request: Request): Promise<Response> {
 
   const result = await requestOtp(
     { db: getAppDb(), notify: driverFromEnv(process.env.NOTIFY_DRIVER), clock: systemClock },
-    { phone, ipAddress: request.headers.get('x-forwarded-for') ?? undefined },
+    { phone, ipAddress: clientIp(request) },
   )
 
   if (!result.ok) {
-    const status = result.reason === 'cooldown' ? 429 : 400
+    const status = result.reason === 'cooldown' || result.reason === 'ip_rate_limited' ? 429 : 400
     return Response.json({ error: result.reason }, { status })
   }
   // Deliberately no code in the response.

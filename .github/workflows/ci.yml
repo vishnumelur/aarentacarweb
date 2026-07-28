@@ -30,6 +30,9 @@ jobs:
       DATABASE_URL_TEST: postgresql://aarental:devpassword@localhost:5432/aarental_test
       TZ: UTC
       NOTIFY_DRIVER: console
+      # CI-only pepper for OTP hash tests (apps/web/src/auth/otp.ts). Not a real
+      # secret — never reused outside this workflow.
+      OTP_PEPPER: ci-only-otp-pepper-0000000000000000000000000000
 
     steps:
       - uses: actions/checkout@v4

@@ -21,7 +21,7 @@ describe('PDPL export and anonymise (FR-13.8)', () => {
     await db.execute(sql`TRUNCATE TABLE audit_log, sessions, customers, users RESTART IDENTITY CASCADE`)
   })
 
-  it('exports every personal field held about the customer', async () => {
+  it('exports the user and customer fields it covers (does not yet include documents, sessions or bookings)', async () => {
     const u = await aCustomer('+971501111111')
     const data = await exportPersonalData({ db, clock }, u.id)
     expect(data.user.phone).toBe('+971501111111')

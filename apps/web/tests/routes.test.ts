@@ -4,6 +4,7 @@ import { getAppDb } from '../src/db.js'
 import { POST as requestRoute } from '../src/app/api/v1/auth/otp/request/route.js'
 import { POST as verifyRoute } from '../src/app/api/v1/auth/otp/verify/route.js'
 import { GET as meRoute } from '../src/app/api/v1/auth/me/route.js'
+import { POST as logoutRoute } from '../src/app/api/v1/auth/logout/route.js'
 
 const db = getAppDb()
 const PHONE = '+971501234567'
@@ -136,6 +137,43 @@ describe('auth routes', () => {
     it('rejects a number that is not a plausible UAE mobile after normalisation', async () => {
       const res = await requestRoute(post('http://localhost/api/v1/auth/otp/request', { phone: '+971211234567' }))
       expect(res.status).toBe(400)
+    })
+  })
+
+  describe('logout', () => {
+    async function signIn(): Promise<string> {
+      const code = await captureCode(() =>
+        requestRoute(post('http://localhost/api/v1/auth/otp/request', { phone: PHONE })))
+      const res = await verifyRoute(post('http://localhost/api/v1/auth/otp/verify', { phone: PHONE, code }))
+      return (res.headers.get('set-cookie') ?? '').split(';')[0]!
+    }
+
+    it('deletes the session row and clears the cookie', async () => {
+      const cookie = await signIn()
+
+      const before = await db.execute<{ count: string }>(sql`SELECT count(*) FROM sessions`)
+      expect(Number(before.rows[0]!.count)).toBe(1)
+
+      const res = await logoutRoute(new Request('http://localhost/api/v1/auth/logout', {
+        method: 'POST', headers: { cookie },
+      }))
+      expect(res.status).toBe(200)
+
+      const setCookie = res.headers.get('set-cookie') ?? ''
+      expect(setCookie).toContain('aa_session=;')
+      expect(setCookie).toContain('Max-Age=0')
+
+      const after = await db.execute<{ count: string }>(sql`SELECT count(*) FROM sessions`)
+      expect(Number(after.rows[0]!.count)).toBe(0)
+
+      // The now-revoked session no longer authenticates.
+      const me = await meRoute(new Request('http://localhost/api/v1/auth/me', { headers: { cookie } }))
+      expect(me.status).toBe(401)
+    })
+
+    it('rejects an unauthenticated logout with 401, not a silent no-op', async () => {
+      const res = await logoutRoute(new Request('http://localhost/api/v1/auth/logout', { method: 'POST' }))
+      expect(res.status).toBe(401)
     })
   })
 })

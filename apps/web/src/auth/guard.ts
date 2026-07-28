@@ -19,11 +19,45 @@ interface GuardDeps {
   readonly clock: Clock
 }
 
-function readCookie(header: string | null, name: string): string | null {
+/**
+ * The one cookie parser for the app. Previously duplicated (differently) in
+ * `me/route.ts` and `logout/route.ts` — one hand-rolled copy was untested and the
+ * three were not guaranteed to agree on cookie-parsing edge cases (empty values,
+ * `=` inside a value, duplicate names). Exported so every route handler that reads
+ * `SESSION_COOKIE` goes through this one implementation.
+ */
+export function readCookie(header: string | null, name: string): string | null {
   if (header === null) return null
   for (const part of header.split(';')) {
     const [k, ...v] = part.trim().split('=')
     if (k === name) return v.join('=')
+  }
+  return null
+}
+
+/**
+ * `x-forwarded-for` is a comma-separated list the client can put anything in — it is
+ * only trustworthy at all when a reverse proxy the app trusts *overwrites* it (never
+ * appends to whatever the client sent) before forwarding. Per the runbook, that proxy
+ * is Caddy. Even then, take only the first entry: everything after it is whatever
+ * the client itself supplied and Caddy simply appended to.
+ */
+export function clientIp(request: Request): string | undefined {
+  const header = request.headers.get('x-forwarded-for')
+  if (header === null) return undefined
+  const first = header.split(',')[0]?.trim()
+  return first !== undefined && first.length > 0 ? first : undefined
+}
+
+/**
+ * Maps an `AuthError` to the `Response` it implies (401/403), so route handlers do
+ * not each hand-write the same try/catch. Returns `null` for anything that is not an
+ * `AuthError`, so callers can distinguish "handled" from "rethrow" — swallowing an
+ * unrelated exception into a 401 would hide real bugs behind a misleading auth error.
+ */
+export function toResponse(error: unknown): Response | null {
+  if (error instanceof AuthError) {
+    return Response.json({ error: error.message }, { status: error.status })
   }
   return null
 }
